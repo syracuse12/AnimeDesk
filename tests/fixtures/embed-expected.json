@@ -1,0 +1,48 @@
+{
+  "download_url": "/download/mal/20/1/sub",
+  "src": "https://hls.dramahot.top/p/scxqicy/hc0y8v2ihz/p48ydr1hwk/4y86pucj56am7p/master.m3u8?v=98135e8741",
+  "subtitles": [
+    {
+      "lang": "en",
+      "label": "English",
+      "default": true,
+      "src": "https://hls.dramahot.top/v/scxqicy/hc0y8v2ihz/p48ydr1hwk/4y86pucj56am7p/subs/8rebebsb5sj8484u.vtt"
+    }
+  ],
+  "poster": "",
+  "sprite_vtt": "",
+  "chapters": [],
+  "default_audio": null,
+  "video_id": 65013,
+  "view": {
+    "min_watch": 30,
+    "dedupe_hours": 24
+  },
+  "player": {
+    "default_quality": "auto",
+    "accent": "#999999",
+    "logo_text": "ZokoAnime",
+    "forward_seconds": 10,
+    "engine": "jwplayer",
+    "skin": "default",
+    "show_download": true,
+    "auto_skip": false,
+    "skip_button": true
+  },
+  "accent": "#999999",
+  "autoplay": true,
+  "muted": false,
+  "resume": true,
+  "start_time": 0,
+  "skip": {
+    "intro": null,
+    "outro": {
+      "start": 1280,
+      "end": 1369
+    }
+  },
+  "auto_skip": false,
+  "auto_next": false,
+  "skip_button": true,
+  "brand": true
+}

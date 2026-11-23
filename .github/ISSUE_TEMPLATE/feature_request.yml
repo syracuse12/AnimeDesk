@@ -1,0 +1,41 @@
+name: Feature request
+about: Suggest a change
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Area
+      options:
+        - player
+        - provider
+        - history or settings
+        - UI
+        - packaging
+        - other
+    validations:
+      required: true
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      options:
+        - label: Works without a new runtime dependency
+          required: false
+        - label: Keeps everything on the local machine
+          required: false
+        - label: Windows only is acceptable
+          required: false
