@@ -1,0 +1,45 @@
+# --- dependencies and generated output ---
+node_modules/
+dist/
+.release/
+.tmp/
+.appdata/
+*.log
+
+# --- local data, history, settings and cached provider data ---
+.review-test-data/
+data/
+*.tsbuildinfo
+
+# --- secrets: never commit real credentials ---
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# --- bundled mpv binaries (large, re-fetchable via npm run setup:mpv) ---
+tools/mpv/*.exe
+tools/mpv/*.dll
+tools/mpv/*.com
+tools/mpv/doc/
+tools/mpv/installer/
+tools/mpv/*.7z
+!tools/mpv/mpv-register.bat
+!tools/mpv/mpv-unregister.bat
+!tools/mpv/updater.bat
+
+# --- OS and editor noise ---
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# --- build artifacts kept out of source history ---
+*.exe
+!tools/mpv/mpv-register.bat
+*.zip
+*.msi
+payload-manifest.json
+SHASUMS256.txt
