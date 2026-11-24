@@ -61,7 +61,7 @@ const QUERY =
    }`;
 
 /** Northern-hemisphere season names; AniList uses the same four words. */
-function currentSeason(now: Date): { season: string; year: number } {
+export function currentSeason(now: Date): { season: string; year: number } {
   const month = now.getUTCMonth();
   const season = month <= 1 || month === 11 ? 'WINTER' : month <= 4 ? 'SPRING' : month <= 7 ? 'SUMMER' : 'FALL';
   // December belongs to the following winter cour.
@@ -245,7 +245,13 @@ export async function suggest(term: string): Promise<DiscoverItem[]> {
   if (KITSU_ENDPOINT !== 'https://kitsu.io/api/edge') throw new FetchError(500, 'Invalid Kitsu endpoint');
   const url =
     `${KITSU_ENDPOINT}/anime?filter[text]=${encodeURIComponent(trimmed)}&page[limit]=6`;
-  const parsed = await fetchJson<KitsuResponse>(url, { accept: 'application/vnd.api+json' });
+  // Same guarded path as AniList: HTTPS-only, hard timeout, small body cap.
+  const parsed = await fetchJson<KitsuResponse>(url, {
+    accept: 'application/vnd.api+json',
+    timeoutMs: 12_000,
+    maxBytes: 512 * 1024,
+    httpsOnly: true,
+  });
   const items = (parsed?.data ?? [])
     .map(toKitsuItem)
     .filter((item): item is DiscoverItem => item !== null)

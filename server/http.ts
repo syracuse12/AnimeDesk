@@ -146,6 +146,8 @@ export interface FetchOptions {
   accept?: string;
   maxBytes?: number;
   redirect?: 'follow' | 'manual';
+  /** Refuse a hop that downgrades to plain HTTP. */
+  httpsOnly?: boolean;
 }
 
 /**
@@ -162,7 +164,9 @@ export async function fetchText(url: string, options: FetchOptions = {}): Promis
   if (options.referer) headers.referer = options.referer;
 
   try {
-    const { response } = await requestPublic(target.toString(), headers, options.timeoutMs);
+    const { response } = await requestPublic(target.toString(), headers, options.timeoutMs, {
+      httpsOnly: options.httpsOnly,
+    });
     if ((response.statusCode ?? 500) >= 400) {
       response.destroy();
       throw new FetchError(response.statusCode ?? 502, `Upstream returned HTTP ${response.statusCode} for ${target.host}`);

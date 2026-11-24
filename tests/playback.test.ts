@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { SessionManager } from '../server/playback/sessions.ts';
 import { registerProvider } from '../server/providers/index.ts';
-import { Store } from '../server/store.ts';
+import { Store, store } from '../server/store.ts';
 import type { AnimeDetail, AudioMode, ProviderId, SearchResult, StreamSource } from '../shared/types.ts';
 import type { Provider } from '../server/providers/types.ts';
 
@@ -26,6 +26,7 @@ function detail(id: string, audio: AudioMode[] = ['sub', 'dub']): AnimeDetail {
 
 let lastAudio: AudioMode | null = null;
 let lastEpisode = 0;
+let lastQuality: string | undefined;
 
 const fake: Provider = {
   info: {
@@ -41,9 +42,10 @@ const fake: Provider = {
   async detail(id: string) {
     return detail(id);
   },
-  async resolve(_id: string, episode: number, audio: AudioMode): Promise<StreamSource> {
+  async resolve(_id: string, episode: number, audio: AudioMode, quality?: string): Promise<StreamSource> {
     lastAudio = audio;
     lastEpisode = episode;
+    lastQuality = quality;
     return { url: `https://cdn.test/${episode}.m3u8`, referer: 'https://embed.test/' };
   },
   async ready() {
@@ -352,5 +354,54 @@ test('an explicit startAt overrides saved progress', async () => {
     startAt: 0,
   });
   assert.equal(session.position, 0);
+  await sessions.stopAll();
+});
+/* ---- per-play quality override ---- */
+
+test('a per-play quality reaches the provider without rewriting the saved setting', async () => {
+  const sessions = await manager();
+  lastQuality = undefined;
+  const before = store.getSettings().quality;
+  await sessions.start({
+    provider: 'hianime',
+    animeId: 'show-20',
+    episodeNumber: 1,
+    audio: 'sub',
+    mode: 'embedded',
+    quality: '480',
+  });
+  assert.equal(lastQuality, '480');
+  // The override is for this play only.
+  assert.equal(store.getSettings().quality, before);
+  assert.equal(new Store().getSettings().quality, before);
+  await sessions.stopAll();
+});
+
+test('a play with no quality falls back to the saved setting', async () => {
+  const sessions = await manager();
+  lastQuality = undefined;
+  await sessions.start({
+    provider: 'hianime',
+    animeId: 'show-21',
+    episodeNumber: 1,
+    audio: 'sub',
+    mode: 'embedded',
+  });
+  assert.equal(lastQuality, store.getSettings().quality);
+  await sessions.stopAll();
+});
+
+test('an unknown quality string still resolves to the saved setting', async () => {
+  const sessions = await manager();
+  lastQuality = undefined;
+  await sessions.start({
+    provider: 'hianime',
+    animeId: 'show-22',
+    episodeNumber: 1,
+    audio: 'sub',
+    mode: 'embedded',
+    quality: undefined,
+  });
+  assert.equal(lastQuality, store.getSettings().quality);
   await sessions.stopAll();
 });

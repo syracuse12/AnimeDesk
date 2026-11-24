@@ -137,43 +137,59 @@ export function App() {
   // Discovery is metadata only; it paints the browse rows and every card
   // carries the title to search a real provider for. It never blocks the home
   // feed, and an empty answer just leaves the rows out.
-  useEffect(() => {
-    if (status && !status.providers.some((item) => item.id !== 'local')) return;
-    let live = true;
-    const kinds: (keyof typeof ROW_SUB)[] = ['trending', 'top', 'seasonal'];
-    const load = async () => {
-      const settled = await Promise.allSettled(
-        kinds.map(async (kind) => ({ kind, items: (await api.discover(kind)).items })),
-      );
-      if (!live) return;
-      setDiscover(
-        settled
-          .flatMap((outcome) => (outcome.status === 'fulfilled' ? [outcome.value] : []))
-          .filter((row) => row.items.length > 0)
-          .map((row) => ({
-            kind: row.kind,
-            title: row.kind === 'trending' ? 'Trending now' : row.kind === 'top' ? 'Top rated' : 'This season',
-            sub: ROW_SUB[row.kind],
-            items: row.items,
-          })),
-      );
-    };
-    void load();
-    return () => {
-      live = false;
-    };
-  }, [status]);
+  const discoverSeq = useRef(0);
+  const genreRef = useRef<string | null>(null);
 
-  // Genre browsing replaces the rows with one filtered row.
-  const loadGenre = useCallback(async (genre: string) => {
-    setDiscoverGenre(genre);
-    try {
-      const { items } = await api.discover('genre', genre);
-      setDiscover([{ kind: 'genre', title: genre, sub: 'Most popular in this genre', items }]);
-    } catch (error) {
-      toast((error as Error).message);
-    }
-  }, [toast]);
+  const loadRows = useCallback(async () => {
+    const seq = (discoverSeq.current += 1);
+    const kinds: (keyof typeof ROW_SUB)[] = ['trending', 'top', 'seasonal'];
+    const settled = await Promise.allSettled(
+      kinds.map(async (kind) => ({ kind, items: (await api.discover(kind)).items })),
+    );
+    if (seq !== discoverSeq.current) return;
+    setDiscover(
+      settled
+        .flatMap((outcome) => (outcome.status === 'fulfilled' ? [outcome.value] : []))
+        .filter((row) => row.items.length > 0)
+        .map((row) => ({
+          kind: row.kind,
+          title: row.kind === 'trending' ? 'Trending now' : row.kind === 'top' ? 'Top rated' : 'This season',
+          sub: ROW_SUB[row.kind],
+          items: row.items,
+        })),
+    );
+  }, []);
+
+  // A status refresh must not wipe a genre the viewer picked, so the default
+  // rows are only loaded while no genre is active.
+  useEffect(() => {
+    if (genreRef.current) return;
+    if (status && !status.providers.some((item) => item.id !== 'local')) return;
+    void loadRows();
+  }, [status, loadRows]);
+
+  // Genre browsing replaces the rows with one filtered row; "All" restores
+  // them. A newer pick wins over a slower earlier answer.
+  const loadGenre = useCallback(
+    async (genre: string | null) => {
+      genreRef.current = genre;
+      setDiscoverGenre(genre);
+      if (!genre) {
+        await loadRows();
+        return;
+      }
+      const seq = (discoverSeq.current += 1);
+      try {
+        const { items } = await api.discover('genre', genre);
+        if (seq !== discoverSeq.current) return;
+        setDiscover([{ kind: 'genre', title: genre, sub: 'Most popular in this genre', items }]);
+      } catch (error) {
+        if (seq !== discoverSeq.current) return;
+        toast((error as Error).message);
+      }
+    },
+    [loadRows, toast],
+  );
 
   // Suggestions follow the query, debounced, and only while the box has focus.
   useEffect(() => {
@@ -186,7 +202,10 @@ export function App() {
     const timer = window.setTimeout(async () => {
       try {
         const { items } = await api.suggest(term);
-        if (seq === suggestSeq.current) setSuggestions(items);
+        if (seq === suggestSeq.current) {
+          setSuggestions(items);
+          setSuggestActive(-1);
+        }
       } catch {
         if (seq === suggestSeq.current) setSuggestions([]);
       }
@@ -318,6 +337,7 @@ export function App() {
           episodeNumber: entry.episodeNumber,
           audio: entry.audio,
           startAt: entry.completed ? 0 : entry.positionSeconds,
+          quality,
         });
         setSession(response.session);
         // Load the series behind the player so the rail and Back work.
@@ -332,7 +352,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [toast],
+    [quality, toast],
   );
 
   const act = useCallback(
@@ -514,6 +534,8 @@ export function App() {
             aria-label="Search anime"
             aria-expanded={suggestOpen && suggestions.length > 0}
             aria-autocomplete="list"
+            aria-controls="search-suggest"
+            aria-activedescendant={suggestActive >= 0 ? `search-suggest-${suggestActive}` : undefined}
             enterKeyHint="search"
           />
           {query && (
@@ -522,6 +544,10 @@ export function App() {
               className="search-clear"
               aria-label="Clear search"
               onClick={() => {
+                // Cancel an in-flight search so a late answer cannot refill the
+                // grid the user just emptied.
+                searchSeq.current += 1;
+                setSearching(false);
                 setQuery('');
                 setResults([]);
                 setSearchErrors([]);
@@ -536,9 +562,14 @@ export function App() {
         </form>
 
         {suggestOpen && suggestions.length > 0 && (
-          <ul className="suggest" role="listbox" aria-label="Title suggestions">
+          <ul className="suggest" id="search-suggest" role="listbox" aria-label="Title suggestions">
             {suggestions.map((item, index) => (
-              <li key={item.id ?? item.title} role="option" aria-selected={index === suggestActive}>
+              <li
+                key={item.id ?? item.title}
+                id={`search-suggest-${index}`}
+                role="option"
+                aria-selected={index === suggestActive}
+              >
                 <button
                   type="button"
                   className={index === suggestActive ? 'suggest-row active' : 'suggest-row'}
@@ -1004,7 +1035,7 @@ function Home({
   loading: boolean;
   discover: DiscoverRow[];
   genre: string | null;
-  onGenre: (genre: string) => Promise<void>;
+  onGenre: (genre: string | null) => Promise<void>;
   onOpen: (provider: ProviderId, id: string) => Promise<void>;
   onResume: (entry: HistoryEntry) => Promise<void>;
   onBrowse: () => void;
@@ -1057,6 +1088,13 @@ function Home({
 
       {discover.length > 0 && (
         <div className="genre-strip" role="group" aria-label="Browse by genre">
+          <button
+            className={genre === null ? 'genre-chip active' : 'genre-chip'}
+            aria-pressed={genre === null}
+            onClick={() => void onGenre(null)}
+          >
+            All
+          </button>
           {GENRES.map((name) => (
             <button
               key={name}

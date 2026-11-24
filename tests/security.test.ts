@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
-import { assertHttpUrl, isPublicAddress, requestPublic } from '../server/http.ts';
+import { assertHttpUrl, fetchText, isPublicAddress, requestPublic } from '../server/http.ts';
 
 test('private, loopback and non-global addresses cannot be fetched', async () => {
   for (const address of ['127.0.0.1', '10.2.3.4', '169.254.169.254', '192.168.1.1', '::1', 'fc00::1', '::ffff:127.0.0.1']) {
@@ -156,4 +156,9 @@ test('an ephemeral local port accepts only its assigned Host', async () => {
     if (child.exitCode === null) await new Promise((resolve) => child.once('exit', resolve));
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
+});
+
+test('httpsOnly refuses a plain-HTTP or non-standard-port destination', async () => {
+  await assert.rejects(fetchText('http://public.example/x', { httpsOnly: true }), /HTTPS on the standard port/);
+  await assert.rejects(fetchText('https://public.example:8443/x', { httpsOnly: true }), /HTTPS on the standard port/);
 });
