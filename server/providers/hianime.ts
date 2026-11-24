@@ -253,7 +253,12 @@ async function pickVariant(masterUrl: string, referer: string, quality: string):
   return variants.find((variant) => variant.height === wanted)?.url ?? variants[0]?.url ?? masterUrl;
 }
 
-async function resolve(id: string, episodeNumber: number, audio: AudioMode): Promise<StreamSource> {
+async function resolve(
+  id: string,
+  episodeNumber: number,
+  audio: AudioMode,
+  quality: 'best' | '1080' | '720' | '480' | 'worst' = 'best',
+): Promise<StreamSource> {
   assertSlug(id);
   const episodes = await listEpisodes(id);
   const episode = episodes.find((item) => item.number === episodeNumber);
@@ -291,7 +296,7 @@ async function resolve(id: string, episodeNumber: number, audio: AudioMode): Pro
       if (!masterUrl) continue;
 
       const subtitle = json.match(/"subtitles":\[[\s\S]*?"src":"([^"]*?\.vtt[^"]*)"/)?.[1];
-      const url = await pickVariant(masterUrl, referer, 'best');
+      const url = await pickVariant(masterUrl, referer, quality);
       return {
         url,
         referer,

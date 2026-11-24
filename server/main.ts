@@ -14,15 +14,18 @@ import { setLibraryDir } from './providers/local.ts';
 import { skips } from './aniskip.ts';
 import { serveStream } from './proxy.ts';
 import { artworkUrl, serveArtwork } from './artwork.ts';
+import { discover, isGenre, suggest } from './discover.ts';
 import type {
   AnimeDetail,
   AudioMode,
   DirectPlayRequest,
+  DiscoverKind,
   HomeFeed,
   PlayRequest,
   PlaybackMode,
   SearchResult,
   HistoryEntry,
+  Settings,
 } from '../shared/types.ts';
 
 const PORT = Number(process.env.ANIMEDESK_PORT ?? 47821);
@@ -94,6 +97,12 @@ function audioOf(value: unknown): AudioMode {
 
 function modeOf(value: unknown): PlaybackMode | undefined {
   return value === 'external' || value === 'embedded' ? value : undefined;
+}
+
+function qualityOf(value: unknown): Settings['quality'] | undefined {
+  return value === 'best' || value === '1080' || value === '720' || value === '480' || value === 'worst'
+    ? value
+    : undefined;
 }
 
 function episodeOf(value: unknown): number {
@@ -210,6 +219,26 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     return true;
   }
 
+  // Discovery is AniList metadata, so it is only reachable while the remote
+  // providers are: the distribution profile is offline by design.
+  if (route === '/api/discover' && method === 'GET') {
+    if (distributionProfile) return json(res, 200, { items: [] }), true;
+    const kind = (url.searchParams.get('kind') ?? 'trending') as DiscoverKind;
+    const genreParam = url.searchParams.get('genre') ?? undefined;
+    const genre = genreParam && isGenre(genreParam) ? genreParam : undefined;
+    const items = await discover(kind, genre);
+    json(res, 200, { items: items.map((item) => safeArt(item)) });
+    return true;
+  }
+
+  if (route === '/api/suggest' && method === 'GET') {
+    if (distributionProfile) return json(res, 200, { items: [] }), true;
+    const term = (url.searchParams.get('q') ?? '').trim().slice(0, LIMITS.maxSearchLength);
+    const items = term ? await suggest(term) : [];
+    json(res, 200, { items: items.map((item) => safeArt(item)) });
+    return true;
+  }
+
   const detailMatch = route.match(/^\/api\/anime\/([a-z]+)\/([^/]+)$/);
   if (detailMatch && method === 'GET') {
     const provider = getProvider(detailMatch[1] as string);
@@ -227,6 +256,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
       audio: audioOf(body.audio),
       startAt: typeof body.startAt === 'number' && Number.isFinite(body.startAt) ? Math.max(0, body.startAt) : undefined,
       mode: modeOf(body.mode),
+      quality: qualityOf(body.quality),
     };
     if (!request.animeId) throw new ProviderError(400, 'animeId is required');
     const session = await manager.start(request);
