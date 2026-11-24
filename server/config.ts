@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { appDataDir } from './paths.ts';
 import type { Settings } from '../shared/types.ts';
 
@@ -10,15 +11,19 @@ export interface Paths {
   tempDir: string;
 }
 
+// Built with path.join rather than string templates: the Windows separators used
+// to be hardcoded, which produced `/tmp/x\history.json` on Linux and left the
+// tests (and the app) writing to a filename with a literal backslash in it.
 export const paths: Paths = (() => {
-  const dataDir = process.env.ANIMEDESK_PROFILE === 'distribution' ? `${appDataDir()}\\distribution` : appDataDir();
+  const base = appDataDir();
+  const dataDir = process.env.ANIMEDESK_PROFILE === 'distribution' ? path.join(base, 'distribution') : base;
   return {
     dataDir,
-    settingsFile: `${dataDir}\\settings.json`,
-    historyFile: `${dataDir}\\history.json`,
-    skipsFile: `${dataDir}\\skips.json`,
-    malFile: `${dataDir}\\mal.json`,
-    tempDir: `${dataDir}\\tmp`,
+    settingsFile: path.join(dataDir, 'settings.json'),
+    historyFile: path.join(dataDir, 'history.json'),
+    skipsFile: path.join(dataDir, 'skips.json'),
+    malFile: path.join(dataDir, 'mal.json'),
+    tempDir: path.join(dataDir, 'tmp'),
   };
 })();
 
