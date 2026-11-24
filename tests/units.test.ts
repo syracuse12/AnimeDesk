@@ -7,7 +7,8 @@ import { assertHttpUrl, cleanText, absoluteUrl, originOf } from '../server/http.
 import { GENRES, currentSeason, isGenre, toItem, toKitsuItem } from '../server/discover.ts';
 import { normalizeLocalPath } from '../server/paths.ts';
 import { Store } from '../server/store.ts';
-import { DEFAULT_SETTINGS, LIMITS } from '../server/config.ts';
+import { DEFAULT_SETTINGS, LIMITS, paths } from '../server/config.ts';
+import { streamUrlFor } from '../server/proxy.ts';
 
 const fixtures = path.join(import.meta.dirname, 'fixtures');
 const blob = fs.readFileSync(path.join(fixtures, 'embed-blob.txt'), 'utf8').trim();
@@ -314,4 +315,44 @@ test('the current cour follows the calendar and December rolls into next winter'
   assert.deepEqual(currentSeason(new Date('2026-07-15T00:00:00Z')), { season: 'SUMMER', year: 2026 });
   assert.deepEqual(currentSeason(new Date('2026-10-15T00:00:00Z')), { season: 'FALL', year: 2026 });
   assert.deepEqual(currentSeason(new Date('2026-12-15T00:00:00Z')), { season: 'WINTER', year: 2027 });
+});
+
+/* ---------- cross-platform paths ---------- */
+
+// The data paths were built with string templates and hardcoded backslashes, so
+// on Linux history landed in a file literally named `/tmp/x\history.json` and
+// every durability test failed to read it. Compare against path.dirname rather
+// than a separator literal, which keeps this meaningful on both platforms.
+test('data paths are joined with the platform separator', () => {
+  for (const [file, name] of [
+    [paths.settingsFile, 'settings.json'],
+    [paths.historyFile, 'history.json'],
+    [paths.skipsFile, 'skips.json'],
+    [paths.malFile, 'mal.json'],
+    [paths.tempDir, 'tmp'],
+  ] as const) {
+    assert.equal(path.basename(file), name, `${file} must end in ${name}`);
+    assert.equal(path.dirname(file), paths.dataDir, `${file} must sit in the data folder`);
+  }
+  assert.equal(path.basename(paths.dataDir), path.basename(path.resolve(paths.dataDir)));
+});
+
+// streamUrlFor only recognised Windows drives and UNC shares, so a POSIX
+// library path fell through to the URL token minter and 403'd in the
+// distribution profile, where remote streams are disabled.
+test('a POSIX library path is proxied as a file, not as a URL', () => {
+  assert.match(streamUrlFor({ url: '/home/me/Anime/Episode 1.mp4' }), /^\/api\/stream\/[a-f0-9]{20}$/);
+  assert.match(streamUrlFor({ url: '/mnt/media/show/ep1.mkv' }), /^\/api\/stream\/[a-f0-9]{20}$/);
+});
+
+test('Windows and UNC library paths are still proxied as files', () => {
+  assert.match(streamUrlFor({ url: 'C:\\Videos\\Anime\\Episode 1.mp4' }), /^\/api\/stream\/[a-f0-9]{20}$/);
+  assert.match(streamUrlFor({ url: '\\\\nas\\share\\ep1.mp4' }), /^\/api\/stream\/[a-f0-9]{20}$/);
+});
+
+test('remote streams are still proxied as URLs and keep their referer', () => {
+  const token = streamUrlFor({ url: 'https://cdn.test/a.m3u8', referer: 'https://embed.test/' });
+  assert.match(token, /^\/api\/stream\/[a-f0-9]{20}$/);
+  // Same URL and referer reuses the token, so a playlist rewrite stays stable.
+  assert.equal(streamUrlFor({ url: 'https://cdn.test/a.m3u8', referer: 'https://embed.test/' }), token);
 });
