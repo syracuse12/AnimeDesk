@@ -73,7 +73,9 @@ instead of being duplicated in the UI and the service.
 
 ## Data flow for one episode
 
-1. UI posts to `/api/play` with provider, series id, episode and audio track.
+1. UI posts to `/api/play` with provider, series id, episode, audio track and an
+   optional per-play `quality`. The play-time value wins over the saved setting
+   without rewriting it.
 2. The provider resolves a stream URL (and subtitle URL, if any).
 3. The service mints proxy tokens and creates a session.
 4. UI opens the local playlist URL through hls.js, or asks for an mpv hand-off.
@@ -81,6 +83,19 @@ instead of being duplicated in the UI and the service.
    atomically.
 6. End of stream is detected from mpv `end-file`/`eof` or the browser `ended`
    event. Autoplay schedules the next episode from that signal, never a timer.
+
+## Discovery
+
+`server/discover.ts` talks to AniList GraphQL (`/api/discover`, `/api/suggest`)
+through the same public-address and body-cap path as every other outbound call.
+It returns metadata only: each item carries a `searchTitle`, and the UI turns a
+card into a catalogue search so no provider id is invented and the catalogue
+stays the sole authority on playability.
+
+Bounds: a 40-key cache with a ten-minute expiry, a genre whitelist (an unknown
+kind degrades to trending), and the standard search-length clamp. The
+distribution profile short-circuits both routes to an empty list rather than a
+403, because the browse rows are simply absent offline.
 
 ## Persistence
 
