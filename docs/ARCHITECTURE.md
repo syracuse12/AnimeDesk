@@ -86,8 +86,12 @@ instead of being duplicated in the UI and the service.
 
 ## Discovery
 
-`server/discover.ts` talks to AniList GraphQL (`/api/discover`, `/api/suggest`)
+`server/discover.ts` talks to AniList GraphQL for the browse rows and to the
+Kitsu JSON:API for the search suggestions (`/api/discover`, `/api/suggest`),
 through the same public-address and body-cap path as every other outbound call.
+Kitsu backs the suggestions because AniList `search` only matches whole words:
+"frier" returns nothing there, which is useless mid-typing.
+
 It returns metadata only: each item carries a `searchTitle`, and the UI turns a
 card into a catalogue search so no provider id is invented and the catalogue
 stays the sole authority on playability.

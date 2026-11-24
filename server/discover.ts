@@ -10,8 +10,8 @@
  * a browse surface, not a live feed, and AniList is a free API with a published
  * rate limit.
  */
-import { ANILIST_ENDPOINT, LIMITS } from './config.ts';
-import { FetchError, cleanText, readLimited, requestPublic, USER_AGENT } from './http.ts';
+import { ANILIST_ENDPOINT, KITSU_ENDPOINT, LIMITS } from './config.ts';
+import { FetchError, cleanText, fetchJson, readLimited, requestPublic, USER_AGENT } from './http.ts';
 import { searchTitle } from './titles.ts';
 import type { DiscoverItem, DiscoverKind } from '../shared/types.ts';
 
@@ -139,6 +139,53 @@ export function toItem(node: MediaNode): DiscoverItem | null {
   };
 }
 
+interface KitsuNode {
+  id?: string | null;
+  attributes?: {
+    canonicalTitle?: string | null;
+    titles?: { en?: string | null; en_jp?: string | null; ja_jp?: string | null } | null;
+    synopsis?: string | null;
+    subtype?: string | null;
+    episodeCount?: number | null;
+    averageRating?: string | null;
+    startDate?: string | null;
+    status?: string | null;
+    posterImage?: { large?: string | null; medium?: string | null } | null;
+    coverImage?: { large?: string | null } | null;
+  } | null;
+}
+
+interface KitsuResponse {
+  data?: (KitsuNode | null)[] | null;
+}
+
+/** Same card shape, sourced from Kitsu's JSON:API payload. */
+export function toKitsuItem(node: KitsuNode | null): DiscoverItem | null {
+  const attrs = node?.attributes;
+  if (!node) return null;
+  const canonical = typeof attrs?.canonicalTitle === 'string' ? attrs.canonicalTitle.trim() : '';
+  const english = typeof attrs?.titles?.en === 'string' ? attrs.titles.en.trim() : '';
+  const romaji = typeof attrs?.titles?.en_jp === 'string' ? attrs.titles.en_jp.trim() : '';
+  const display = english || canonical || romaji;
+  if (!display || display.length > 200) return null;
+  const searchFor = searchTitle(canonical || romaji || english).slice(0, LIMITS.maxSearchLength) || display;
+  const rating = Number(attrs?.averageRating);
+  const yearMatch = /^(\d{4})/.exec(attrs?.startDate ?? '');
+  return {
+    id: typeof node.id === 'string' ? node.id : undefined,
+    title: display.slice(0, 200),
+    searchTitle: searchFor,
+    coverUrl: https(attrs?.posterImage?.large) ?? https(attrs?.posterImage?.medium),
+    bannerUrl: https(attrs?.coverImage?.large),
+    description: synopsis(attrs?.synopsis),
+    format: typeof attrs?.subtype === 'string' ? attrs.subtype.replace(/_/g, ' ').toUpperCase() : undefined,
+    year: yearMatch?.[1],
+    episodes: typeof attrs?.episodeCount === 'number' && attrs.episodeCount > 0 ? attrs.episodeCount : undefined,
+    score: Number.isFinite(rating) && rating > 0 ? Math.round(rating) : undefined,
+    status: typeof attrs?.status === 'string' ? attrs.status.replace(/_/g, ' ').toLowerCase() : undefined,
+  };
+}
+
 function remember(key: string, items: DiscoverItem[]): DiscoverItem[] {
   if (cache.size >= MAX_KEYS) {
     const oldest = cache.keys().next().value;
@@ -182,16 +229,25 @@ export async function discover(kind: DiscoverKind, genre?: string): Promise<Disc
   return items.length ? remember(key, items) : items;
 }
 
-/** Title suggestions for the search box, newest and most popular first. */
+/**
+ * Title suggestions for the search box.
+ *
+ * These come from Kitsu rather than AniList: AniList `search` only matches whole
+ * words, so "frier" finds nothing until the token is complete, which is useless
+ * while someone is still typing. Kitsu matches on a prefix.
+ */
 export async function suggest(term: string): Promise<DiscoverItem[]> {
   const trimmed = term.trim().slice(0, LIMITS.maxSearchLength);
   if (trimmed.length < 2) return [];
   const key = `suggest:${trimmed.toLowerCase()}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.items;
-  const media = await post({ page: 1, perPage: 6, search: trimmed, sort: ['POPULARITY_DESC'] });
-  const items = media
-    .map(toItem)
+  if (KITSU_ENDPOINT !== 'https://kitsu.io/api/edge') throw new FetchError(500, 'Invalid Kitsu endpoint');
+  const url =
+    `${KITSU_ENDPOINT}/anime?filter[text]=${encodeURIComponent(trimmed)}&page[limit]=6`;
+  const parsed = await fetchJson<KitsuResponse>(url, { accept: 'application/vnd.api+json' });
+  const items = (parsed?.data ?? [])
+    .map(toKitsuItem)
     .filter((item): item is DiscoverItem => item !== null)
     .slice(0, 6);
   return items.length ? remember(key, items) : items;

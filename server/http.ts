@@ -194,7 +194,8 @@ export async function fetchText(url: string, options: FetchOptions = {}): Promis
 }
 
 export async function fetchJson<T>(url: string, options: FetchOptions = {}): Promise<T> {
-  const body = await fetchText(url, { ...options, accept: 'application/json' });
+  // Keep a caller's media type: Kitsu rejects application/json with a 406.
+  const body = await fetchText(url, { ...options, accept: options.accept ?? 'application/json' });
   try {
     return JSON.parse(body) as T;
   } catch {
