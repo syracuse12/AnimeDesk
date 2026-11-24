@@ -58,6 +58,8 @@ export interface StreamSource {
   /** Referer the CDN requires, if any. */
   referer?: string;
   subtitleUrl?: string;
+  /** BCP-47 tag of the side-loaded subtitle, when the source states one. */
+  subtitleLang?: string;
   /** Extra mpv arguments; never built from untrusted text. */
   extraArgs?: string[];
   /** Height of the rendition actually chosen, null when the source is unvaried. */
@@ -139,6 +141,8 @@ export interface PlaybackSession {
   hls: boolean;
   /** Same-origin proxied subtitle track, when the source offered one. */
   subtitleUrl: string | null;
+  /** Language of the side-loaded track, for an honest menu label. */
+  subtitleLang: string | null;
   /** The quality that was *asked* for. A preference, never a promise. */
   quality: Settings['quality'];
   /** Height actually served, so the UI can show fact instead of preference. */
@@ -218,6 +222,7 @@ export interface DirectPlayRequest {
   audio: AudioMode;
   episodeNumber?: number;
   subtitleUrl?: string;
+  subtitleLang?: string;
 }
 
 export interface HomeFeed {

@@ -76,6 +76,7 @@ interface BeginParams {
   url: string;
   referer?: string;
   subtitleUrl?: string;
+  subtitleLang?: string;
   startAt: number;
   volume: number;
   mode: PlaybackMode;
@@ -190,6 +191,7 @@ export class SessionManager extends EventEmitter {
       url: stream.url,
       referer: stream.referer,
       subtitleUrl: stream.subtitleUrl,
+      subtitleLang: stream.subtitleLang,
       startAt,
       volume: settings.volume,
       mode,
@@ -258,6 +260,7 @@ export class SessionManager extends EventEmitter {
       hls: /\.m3u8(\?|$)/i.test(params.url),
       subtitleUrl:
         params.mode === 'embedded' ? subtitlePath : null,
+      subtitleLang: params.subtitleLang ?? null,
       quality: params.quality ?? store.getSettings().quality,
       resolvedHeight: params.resolvedHeight ?? null,
       qualityNote: params.qualityNote ?? null,

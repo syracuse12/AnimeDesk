@@ -2,6 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import { api, formatTime } from '../api.ts';
 import { autoSkipTarget, clampRange, visibleSkip, type SkipKind } from '../../shared/skip-timing.ts';
+import {
+  SUBTITLES_OFF,
+  hlsSubtitleState,
+  resolveSubtitleSelection,
+  sideTrackLabel,
+  subtitleModes,
+} from '../../shared/subtitles.ts';
+import {
+  classifyFatal,
+  emptyRecovery,
+  nextRecovery,
+  noteProgress,
+  type RecoveryState,
+} from '../../shared/player-recovery.ts';
 import type { PlaybackSession, Settings, SkipRange } from '../../shared/types.ts';
 
 const RATES = [0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -35,6 +49,10 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
   const handledRef = useRef<{ kind: SkipKind } | null>(null);
   const lastSent = useRef(0);
   const endedSent = useRef(false);
+  const recovery = useRef<RecoveryState>(emptyRecovery());
+  const recoveryTimer = useRef<number | null>(null);
+  /** The viewer's own choice. Null until they pick one, so defaults still apply. */
+  const subtitleChoice = useRef<number | null>(null);
 
   /**
    * Push the position now, ignoring the throttle. A seek or a pause can land
@@ -69,7 +87,7 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
   const [audioTracks, setAudioTracks] = useState<TrackInfo[]>([]);
   const [subtitleTracks, setSubtitleTracks] = useState<TrackInfo[]>([]);
   const [audioIndex, setAudioIndex] = useState(-1);
-  const [subtitleIndex, setSubtitleIndex] = useState(-1);
+  const [subtitleIndex, setSubtitleIndex] = useState(SUBTITLES_OFF);
   const [duration, setDuration] = useState<number | null>(session.duration);
   const [position, setPosition] = useState(session.position);
   const [panel, setPanel] = useState<'none' | 'audio' | 'subs' | 'speed'>('none');
@@ -78,6 +96,12 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
   const counting = session.state === 'countdown' && session.nextAt;
 
   const isHls = session.hls;
+
+  // The side-loaded VTT is not one of hls.js's renditions, so it lives in the
+  // same index space but one past the end of them.
+  const hasSideTrack = Boolean(session.subtitleUrl);
+  const sideIndex = hasSideTrack ? subtitleTracks.length : SUBTITLES_OFF;
+  const subtitleCount = subtitleTracks.length + (hasSideTrack ? 1 : 0);
 
   const poke = useCallback(() => {
     setVisible(true);
@@ -98,6 +122,12 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
     setPosition(session.position);
     setScrub(null);
     setPanel('none');
+    // A new episode publishes its own tracks; the old choice must not leak in.
+    subtitleChoice.current = null;
+    setSubtitleTracks([]);
+    setSubtitleIndex(SUBTITLES_OFF);
+    recovery.current = emptyRecovery();
+    if (recoveryTimer.current) window.clearTimeout(recoveryTimer.current);
     // Only the session id: duration/position change on every progress push and
     // would otherwise re-run this and flash the loading overlay mid-episode.
   }, [session.sessionId]);
@@ -124,19 +154,61 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
       hlsRef.current = hls;
       hls.attachMedia(video);
       hls.loadSource(session.streamUrl);
+
+      const applySubtitle = (selected: number) => {
+        const state = hlsSubtitleState(selected, hls.subtitleTracks.length);
+        hls.subtitleTrack = state.subtitleTrack;
+        hls.subtitleDisplay = state.subtitleDisplay;
+      };
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setAudioTracks(hls.audioTracks.map((track, index) => ({ index, label: track.name || `Track ${index + 1}`, lang: track.lang })));
         setSubtitleTracks(hls.subtitleTracks.map((track, index) => ({ index, label: track.name || track.lang || `Track ${index + 1}`, lang: track.lang })));
+        // hls.js defaults subtitleDisplay to true, so a track would render even
+        // with nothing chosen. Resolve the remembered choice against the list
+        // that actually arrived and apply it before anything is painted.
+        const count = hls.subtitleTracks.length + (hasSideTrack ? 1 : 0);
+        const selected = resolveSubtitleSelection(subtitleChoice.current, session.audio, count);
+        setSubtitleIndex(selected);
+        applySubtitle(selected);
         onLoaded();
       });
+
+      // A fragment that arrived is proof the source is alive again.
+      hls.on(Hls.Events.FRAG_LOADED, () => {
+        recovery.current = noteProgress(recovery.current);
+      });
+
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
         const reason = data.details || data.type;
-        setFatal(`Playback failed: ${reason}`);
-        onFallback(`hls.js: ${reason}`);
+        const decision = nextRecovery(classifyFatal(data.details), recovery.current);
+        recovery.current = decision.state;
+
+        if (decision.action === 'give-up') {
+          setFatal(`Playback failed: ${reason}`);
+          onFallback(`hls.js: ${reason}`);
+          return;
+        }
+
+        // Never restart from zero: the viewer keeps their place across the retry.
+        const resumeAt = video.currentTime;
+        flushProgress();
+        recoveryTimer.current = window.setTimeout(() => {
+          if (disposed) return;
+          try {
+            if (decision.action === 'recoverMedia') hls.recoverMediaError();
+            else hls.startLoad(resumeAt > 1 ? resumeAt : undefined);
+          } catch {
+            setFatal(`Playback failed: ${reason}`);
+            onFallback(`hls.js: ${reason}`);
+          }
+        }, decision.delayMs);
       });
+
       return () => {
         disposed = true;
+        if (recoveryTimer.current) window.clearTimeout(recoveryTimer.current);
         hls.destroy();
         hlsRef.current = null;
       };
@@ -158,14 +230,61 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.sessionId, session.streamUrl]);
 
-  // Native subtitle track, when the source supplied one.
+  /**
+   * Apply one subtitle choice to both namespaces. hls.js renditions are indexed
+   * as they arrive; the side-loaded VTT sits one past the end of them, because
+   * it is not a rendition at all. Everything not chosen is explicitly disabled —
+   * leaving a track on its browser default is what let subtitles survive "Off".
+   */
+  const applySubtitle = useCallback((selected: number) => {
+    const video = videoRef.current;
+    const hls = hlsRef.current;
+    const hlsCount = hls ? hls.subtitleTracks.length : 0;
+    if (hls) {
+      const state = hlsSubtitleState(selected, hlsCount);
+      hls.subtitleTrack = state.subtitleTrack;
+      hls.subtitleDisplay = state.subtitleDisplay;
+    }
+    if (!video) return;
+    const side = session.subtitleUrl;
+    // The element's own track is identified by identity, not by position, so a
+    // late-arriving <track> cannot be confused with an hls.js rendition.
+    const sideTracks = new Set<TextTrack>();
+    for (const node of Array.from(video.querySelectorAll('track'))) sideTracks.add(node.track);
+    const modes = subtitleModes(hlsCount + (side ? 1 : 0), selected);
+    let hlsSeen = 0;
+    Array.from(video.textTracks).forEach((track) => {
+      if (sideTracks.has(track)) {
+        track.mode = modes[hlsCount] ?? 'disabled';
+        return;
+      }
+      track.mode = modes[hlsSeen] ?? 'disabled';
+      hlsSeen += 1;
+    });
+  }, [session.subtitleUrl]);
+
+  // Re-apply on every change, and again whenever a track element finishes
+  // loading: a <track> that arrives late would otherwise keep its own mode.
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    for (const track of Array.from(video.textTracks)) {
-      track.mode = subtitleIndex < 0 ? 'showing' : 'disabled';
-    }
-  }, [subtitleIndex, ready]);
+    applySubtitle(subtitleIndex);
+    const onApply = () => applySubtitle(subtitleIndex);
+    const tracks = video.textTracks;
+    tracks.addEventListener?.('addtrack', onApply);
+    const nodes = Array.from(video.querySelectorAll('track'));
+    for (const node of nodes) node.addEventListener('load', onApply);
+    return () => {
+      tracks.removeEventListener?.('addtrack', onApply);
+      for (const node of nodes) node.removeEventListener('load', onApply);
+    };
+  }, [applySubtitle, ready, subtitleIndex]);
+
+  const selectSubtitle = useCallback((next: number) => {
+    subtitleChoice.current = next;
+    setSubtitleIndex(next);
+    setPanel('none');
+  }, []);
 
   useEffect(() => {
     if (!counting) return;
@@ -371,7 +490,12 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
         onDoubleClick={toggleFullscreen}
       >
         {session.subtitleUrl && (
-          <track kind="subtitles" src={session.subtitleUrl} srcLang="en" label="English" default />
+          <track
+            kind="subtitles"
+            src={session.subtitleUrl}
+            srcLang={session.subtitleLang ?? 'en'}
+            label={sideTrackLabel(session.subtitleLang)}
+          />
         )}
       </video>
 
@@ -528,17 +652,22 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
             )}
           </div>
 
-          {subtitleTracks.length > 0 && (
+          {subtitleCount > 0 && (
             <div className="menu-wrap">
               <button className="text-btn" onClick={() => setPanel(panel === 'subs' ? 'none' : 'subs')} title="Subtitles">CC</button>
               {panel === 'subs' && (
                 <div className="menu">
-                  <button className={subtitleIndex < 0 ? 'active' : ''} onClick={() => { setSubtitleIndex(-1); if (hlsRef.current) hlsRef.current.subtitleTrack = -1; setPanel('none'); }}>Off</button>
+                  <button className={subtitleIndex === SUBTITLES_OFF ? 'active' : ''} onClick={() => selectSubtitle(SUBTITLES_OFF)}>Off</button>
                   {subtitleTracks.map((track) => (
-                    <button key={track.index} className={subtitleIndex === track.index ? 'active' : ''} onClick={() => { setSubtitleIndex(track.index); if (hlsRef.current) hlsRef.current.subtitleTrack = track.index; setPanel('none'); }}>
+                    <button key={track.index} className={subtitleIndex === track.index ? 'active' : ''} onClick={() => selectSubtitle(track.index)}>
                       {track.label}
                     </button>
                   ))}
+                  {hasSideTrack && (
+                    <button className={subtitleIndex === sideIndex ? 'active' : ''} onClick={() => selectSubtitle(sideIndex)}>
+                      {sideTrackLabel(session.subtitleLang)}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
