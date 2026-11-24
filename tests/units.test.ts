@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { deobfuscate, titleFromPage, coverFromPage } from '../server/providers/hianime.ts';
 import { assertHttpUrl, cleanText, absoluteUrl, originOf } from '../server/http.ts';
-import { GENRES, isGenre, toItem, toKitsuItem } from '../server/discover.ts';
+import { GENRES, currentSeason, isGenre, toItem, toKitsuItem } from '../server/discover.ts';
 import { normalizeLocalPath } from '../server/paths.ts';
 import { Store } from '../server/store.ts';
 import { DEFAULT_SETTINGS, LIMITS } from '../server/config.ts';
@@ -306,4 +306,12 @@ test('toKitsuItem rejects a null node, an empty title and bad artwork', () => {
     attributes: { canonicalTitle: 'A', posterImage: { large: 'http://insecure/a.jpg' } },
   });
   assert.equal(item?.coverUrl, undefined);
+});
+
+test('the current cour follows the calendar and December rolls into next winter', () => {
+  assert.deepEqual(currentSeason(new Date('2026-01-15T00:00:00Z')), { season: 'WINTER', year: 2026 });
+  assert.deepEqual(currentSeason(new Date('2026-04-15T00:00:00Z')), { season: 'SPRING', year: 2026 });
+  assert.deepEqual(currentSeason(new Date('2026-07-15T00:00:00Z')), { season: 'SUMMER', year: 2026 });
+  assert.deepEqual(currentSeason(new Date('2026-10-15T00:00:00Z')), { season: 'FALL', year: 2026 });
+  assert.deepEqual(currentSeason(new Date('2026-12-15T00:00:00Z')), { season: 'WINTER', year: 2027 });
 });
