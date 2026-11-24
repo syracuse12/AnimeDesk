@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { deobfuscate, titleFromPage, coverFromPage } from '../server/providers/hianime.ts';
 import { assertHttpUrl, cleanText, absoluteUrl, originOf } from '../server/http.ts';
-import { GENRES, isGenre, toItem } from '../server/discover.ts';
+import { GENRES, isGenre, toItem, toKitsuItem } from '../server/discover.ts';
 import { normalizeLocalPath } from '../server/paths.ts';
 import { Store } from '../server/store.ts';
 import { DEFAULT_SETTINGS, LIMITS } from '../server/config.ts';
@@ -267,4 +267,43 @@ test('the genre whitelist is exact and case sensitive', () => {
   assert.equal(isGenre('Sci-Fi'), true);
   assert.equal(isGenre('science fiction'), false);
   assert.equal(isGenre(''), false);
+});
+
+test('toKitsuItem reads the JSON:API shape and searches with the romaji title', () => {
+  const item = toKitsuItem({
+    id: '46474',
+    attributes: {
+      canonicalTitle: 'Sousou no Frieren',
+      titles: { en: 'Frieren: Beyond Journey’s End', en_jp: 'Sousou no Frieren' },
+      episodeCount: 28,
+      averageRating: '86.4',
+      startDate: '2023-09-29',
+      subtype: 'TV',
+      status: 'finished',
+      posterImage: { large: 'https://media.kitsu.io/a.jpg' },
+    },
+  });
+  assert.equal(item?.title, 'Frieren: Beyond Journey’s End');
+  assert.equal(item?.searchTitle, 'Sousou no Frieren');
+  assert.equal(item?.episodes, 28);
+  assert.equal(item?.score, 86);
+  assert.equal(item?.year, '2023');
+  assert.equal(item?.format, 'TV');
+  assert.equal(item?.coverUrl, 'https://media.kitsu.io/a.jpg');
+});
+
+test('toKitsuItem falls back through canonical and romaji titles', () => {
+  const item = toKitsuItem({ attributes: { canonicalTitle: 'Bleach', titles: {} } });
+  assert.equal(item?.title, 'Bleach');
+  assert.equal(item?.searchTitle, 'Bleach');
+});
+
+test('toKitsuItem rejects a null node, an empty title and bad artwork', () => {
+  assert.equal(toKitsuItem(null), null);
+  assert.equal(toKitsuItem({ attributes: {} }), null);
+  assert.equal(toKitsuItem({ attributes: { canonicalTitle: '   ' } }), null);
+  const item = toKitsuItem({
+    attributes: { canonicalTitle: 'A', posterImage: { large: 'http://insecure/a.jpg' } },
+  });
+  assert.equal(item?.coverUrl, undefined);
 });

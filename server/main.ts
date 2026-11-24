@@ -203,7 +203,9 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
   if (route === '/api/search' && method === 'GET') {
     const query = (url.searchParams.get('q') ?? '').trim().slice(0, LIMITS.maxSearchLength);
     const only = url.searchParams.get('provider');
-    const providers = only ? [getProvider(only)] : providerInfos().map((info) => getProvider(info.id));
+    const providers = !only || only === 'all'
+      ? providerInfos().map((info) => getProvider(info.id))
+      : [getProvider(only)];
     // An empty query is a browse request: only the local library can answer it.
     const active = query ? providers : providers.filter((provider) => provider.info.id === 'local');
     if (!active.length) return json(res, 200, { results: [] }), true;

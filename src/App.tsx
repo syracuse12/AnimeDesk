@@ -215,6 +215,10 @@ export function App() {
     const wasSearch = previousView.current === 'search';
     previousView.current = view;
     if (wasSearch || view === 'watch') return;
+    // Typing in the search box flips the view to search; moving focus to main
+    // would take the caret out of the box and close the suggestion list.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('.rail-search-wrap')) return;
     mainRef.current?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
   }, [view]);
@@ -224,7 +228,9 @@ export function App() {
       const trimmed = (term ?? query).trim();
       const key = `${provider}|${trimmed}`;
       lastRun.current = key;
-      setSuggestOpen(false);
+      // Keep the list open here: the debounced live search would otherwise close
+      // it 320ms after typing, before anyone could pick. Submitting, Escape, a
+      // pick and the clear button each close it themselves.
       const seq = (searchSeq.current += 1);
       setSearching(true);
       setSearchErrors([]);
@@ -275,7 +281,7 @@ export function App() {
         if (detailSeq.current.isCurrent(seq)) setDetailLoading(false);
       }
     },
-    [toast],
+    [origin, toast, view],
   );
 
   const playEpisode = useCallback(
@@ -299,7 +305,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [audio, toast],
+    [audio, quality, toast],
   );
 
   const playFromHistory = useCallback(

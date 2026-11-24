@@ -73,3 +73,5 @@ export const PROVIDER_TIMEOUT = 25_000;
 /** AniSkip is a free community API; identify the client politely. */
 export const ANISKIP_BASE = 'https://api.aniskip.com/v2';
 export const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
+/** Kitsu prefix-matches titles, so it backs the search suggestions. */
+export const KITSU_ENDPOINT = 'https://kitsu.io/api/edge';

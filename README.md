@@ -33,8 +33,9 @@ The UI is a local React page. The backend is a local Node service bound to
 
 - Search across enabled providers, view series detail and full episode lists.
 - Browse rows from AniList (trending, top rated, this season, genres) and title
-  suggestions in the search box. They are metadata only: a card searches the
-  catalogue for its title, so the providers still decide what is playable.
+  suggestions from Kitsu in the search box. They are metadata only: a card
+  searches the catalogue for its title, so the providers still decide what is
+  playable.
 - Sub/dub toggle, disabled and explained when a series has no dub listed.
 - In-app player: seeking, volume, speed, fullscreen, subtitle and audio-track
   selection, keyboard shortcuts, and a one-click hand-off to mpv.
@@ -166,9 +167,9 @@ See [docs/LICENSING.md](docs/LICENSING.md).
 - AniSkip needs a MyAnimeList id, matched through AniList by exact title. A
   differently named series gets no timestamps rather than wrong ones; manual
   ranges cover that case.
-- Discovery rows and suggestions come from AniList, so they are unavailable in
-  the `distribution` profile and while the network is down. A card is a search
-  shortcut, not a playable link.
+- Discovery rows come from AniList and suggestions from Kitsu, so both are
+  unavailable in the `distribution` profile and while the network is down. A
+  card is a search shortcut, not a playable link.
 - The local provider labels every file as sub+dub; it only knows filenames.
 - No downloads or offline cache, no MAL/AniList sync, no cross-series queue.
 - The quality setting prefers a matching HLS variant; it is a preference, not a
