@@ -123,6 +123,10 @@ button { cursor: pointer; }
 .brand-text small { color: var(--muted); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .rail-search-wrap { position: relative; }
+/* The suggestion list is absolutely positioned, so the wrapper must be the
+   containing block; without this it anchors to the rail instead of the box. */
+.rail-search-wrap { position: relative; }
+
 .rail-search {
   display: flex;
   align-items: center;
@@ -536,6 +540,19 @@ h2 { font-size: 16px; letter-spacing: -0.012em; margin: 0; font-weight: 620; }
 
 /* Discovery rows borrow the poster card but stay visually quieter than the feed. */
 .discover-row .poster-card strong { color: var(--text-dim); }
+.row-note { margin: 6px var(--gutter) 0; font-size: 11px; color: var(--muted); }
+
+.quality-pick { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.quality-pick select {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 5px 8px;
+  min-height: 30px;
+}
+.quality-pick select:focus-visible { border-color: var(--accent); outline: none; }
 .discover-row .poster-card:hover strong { color: #fff; }
 .row-note { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
 

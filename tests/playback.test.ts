@@ -405,3 +405,45 @@ test('an unknown quality string still resolves to the saved setting', async () =
   assert.equal(lastQuality, store.getSettings().quality);
   await sessions.stopAll();
 });
+
+/* ---- the choice must survive a hand-off ---- */
+
+test('pressing Next keeps the per-play quality instead of reverting to the setting', async () => {
+  const sessions = await manager();
+  const before = store.getSettings().quality;
+  const first = await sessions.start({
+    provider: 'hianime',
+    animeId: 'show-23',
+    episodeNumber: 1,
+    audio: 'sub',
+    mode: 'embedded',
+    quality: '480',
+  });
+  assert.equal(lastQuality, '480');
+
+  lastQuality = undefined;
+  await sessions.action(first.sessionId, 'next');
+
+  // A fresh PlayRequest is built for the next episode; it must carry '480',
+  // not silently fall back to the saved setting mid-series.
+  assert.equal(lastQuality, '480');
+  assert.equal(store.getSettings().quality, before);
+  await sessions.stopAll();
+});
+
+test('pressing Previous keeps the per-play quality too', async () => {
+  const sessions = await manager();
+  const first = await sessions.start({
+    provider: 'hianime',
+    animeId: 'show-24',
+    episodeNumber: 2,
+    audio: 'sub',
+    mode: 'embedded',
+    quality: 'worst',
+  });
+
+  lastQuality = undefined;
+  await sessions.action(first.sessionId, 'previous');
+  assert.equal(lastQuality, 'worst');
+  await sessions.stopAll();
+});

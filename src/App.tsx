@@ -193,12 +193,16 @@ export function App() {
 
   // Suggestions follow the query, debounced, and only while the box has focus.
   useEffect(() => {
+    // Bump before the early return: clearing the box or blurring must also
+    // invalidate a request already in flight, or a late answer repaints a list
+    // the viewer has just dismissed.
+    const seq = (suggestSeq.current += 1);
     const term = query.trim();
     if (term.length < 2 || !suggestOpen) {
       setSuggestions([]);
+      setSuggestActive(-1);
       return;
     }
-    const seq = (suggestSeq.current += 1);
     const timer = window.setTimeout(async () => {
       try {
         const { items } = await api.suggest(term);
@@ -532,6 +536,7 @@ export function App() {
             placeholder="Search anime"
             maxLength={120}
             aria-label="Search anime"
+            role="combobox"
             aria-expanded={suggestOpen && suggestions.length > 0}
             aria-autocomplete="list"
             aria-controls="search-suggest"
@@ -746,7 +751,12 @@ export function App() {
             onPlay={playEpisode}
             onBack={() => setView(origin)}
             quality={quality}
-            setQuality={setQuality}
+            setQuality={(next) => {
+              setQuality(next);
+              // Persist so the pick survives a reload, but the request below
+              // still sends it per play, so an autoplay hand-off keeps it too.
+              void saveSettings({ quality: next });
+            }}
             manual={manual}
             onSaveManual={saveManualSkip}
           />
@@ -1086,7 +1096,7 @@ function Home({
         </header>
       )}
 
-      {discover.length > 0 && (
+      {(discover.length > 0 || genre !== null) && (
         <div className="genre-strip" role="group" aria-label="Browse by genre">
           <button
             className={genre === null ? 'genre-chip active' : 'genre-chip'}
@@ -1155,7 +1165,11 @@ function Home({
               />
             ))}
           </div>
-          <p className="row-note">Tap a title to search the catalogue for it.</p>
+          <p className="row-note">
+            {row.items.length > 0
+              ? 'Tap a title to search the catalogue for it.'
+              : 'Nothing came back for this genre. Try another, or All.'}
+          </p>
         </section>
       ))}
 

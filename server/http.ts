@@ -166,6 +166,9 @@ export async function fetchText(url: string, options: FetchOptions = {}): Promis
   try {
     const { response } = await requestPublic(target.toString(), headers, options.timeoutMs, {
       httpsOnly: options.httpsOnly,
+      // 'manual' must reach the socket layer: callers that opt out of following
+      // a redirect want to see the 3xx, not a silently re-issued hop.
+      redirect: options.redirect === 'manual' ? 'reject' : 'follow',
     });
     if ((response.statusCode ?? 500) >= 400) {
       response.destroy();

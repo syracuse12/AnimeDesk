@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { LIMITS, VERSION, paths } from './config.ts';
+import { LIMITS, VERSION, DEFAULT_SETTINGS, paths } from './config.ts';
 import { ensureDir, isDirectory } from './paths.ts';
 import { store } from './store.ts';
 import { distributionProfile, getProvider, providerInfos } from './providers/index.ts';
@@ -392,6 +392,17 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
 
   if (route === '/api/settings' && method === 'PATCH') {
     const settings = await store.updateSettings(asRecord(await readBody(req)));
+    setLibraryDir(settings.localLibraryDir);
+    manager.setVolume(settings.volume);
+    manager.setRate(settings.playbackRate);
+    json(res, 200, { settings });
+    return true;
+  }
+
+  // Reset to defaults. The UI calls this, so the route has to exist or the
+  // button fails against a live service.
+  if (route === '/api/settings' && method === 'DELETE') {
+    const settings = await store.updateSettings({ ...DEFAULT_SETTINGS });
     setLibraryDir(settings.localLibraryDir);
     manager.setVolume(settings.volume);
     manager.setRate(settings.playbackRate);

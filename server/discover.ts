@@ -8,18 +8,76 @@
  *
  * Answers are cached with a bounded key count and a short expiry: discovery is
  * a browse surface, not a live feed, and AniList is a free API with a published
- * rate limit.
+ * rate limit. Two things keep the free tier usable:
+ *
+ *  - rows and suggestions cache separately, because typing a six-letter title
+ *    would otherwise evict the browse rows that the home screen is still showing;
+ *  - a failed refresh serves the last good answer instead of blanking the row,
+ *    so a 429 or a timeout degrades to stale content rather than to nothing.
  */
 import { ANILIST_ENDPOINT, KITSU_ENDPOINT, LIMITS } from './config.ts';
 import { FetchError, cleanText, fetchJson, readLimited, requestPublic, USER_AGENT } from './http.ts';
 import { searchTitle } from './titles.ts';
 import type { DiscoverItem, DiscoverKind } from '../shared/types.ts';
 
+/** How long an answer counts as current. */
 const TTL = 10 * 60_000;
-const MAX_KEYS = 40;
+/** How long a stale answer may still be served while refreshes keep failing. */
+const STALE_TTL = 60 * 60_000;
+const MAX_ROWS = 40;
+const MAX_SUGGESTS = 120;
 const MAX_ITEMS = 30;
 
-const cache = new Map<string, { at: number; items: DiscoverItem[] }>();
+interface Entry {
+  at: number;
+  items: DiscoverItem[];
+}
+
+/**
+ * A small map with least-recently-used eviction.
+ *
+ * Reading refreshes a key's position, so a row the viewer keeps coming back to
+ * survives a burst of one-shot suggestion terms. The previous version evicted
+ * by insertion order, which meant every keystroke pushed out the oldest browse
+ * row even when it was still on screen.
+ */
+class BoundedCache {
+  private readonly map = new Map<string, Entry>();
+  // Declared explicitly rather than as a constructor parameter property:
+  // Node runs these files through strip-only type removal, which cannot emit one.
+  private readonly max: number;
+
+  constructor(max: number) {
+    this.max = max;
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+
+  get(key: string): Entry | undefined {
+    const hit = this.map.get(key);
+    if (!hit) return undefined;
+    this.map.delete(key);
+    this.map.set(key, hit);
+    return hit;
+  }
+
+  set(key: string, items: DiscoverItem[]): void {
+    this.map.delete(key);
+    this.map.set(key, { at: Date.now(), items });
+    while (this.map.size > this.max) {
+      const oldest = this.map.keys().next().value;
+      if (oldest === undefined) break;
+      this.map.delete(oldest);
+    }
+  }
+}
+
+const rows = new BoundedCache(MAX_ROWS);
+const suggestions = new BoundedCache(MAX_SUGGESTS);
+/** One in-flight request per key, so rapid typing cannot stack upstream calls. */
+const inflight = new Map<string, Promise<DiscoverItem[]>>();
 
 /** Genres AniList publishes, in the order the catalogue offers them. */
 export const GENRES = [
@@ -85,7 +143,10 @@ async function post(variables: Record<string, unknown>): Promise<MediaNode[]> {
   );
   if (response.statusCode !== 200) {
     response.destroy();
-    throw new FetchError(502, `AniList HTTP ${response.statusCode}`);
+    // 429 is worth its own word: the caller is being asked to slow down, and
+    // the message reaches the viewer rather than a generic upstream failure.
+    const status = response.statusCode === 429 ? 429 : 502;
+    throw new FetchError(status, `AniList HTTP ${response.statusCode}`);
   }
   let parsed: GqlResponse;
   try {
@@ -186,13 +247,66 @@ export function toKitsuItem(node: KitsuNode | null): DiscoverItem | null {
   };
 }
 
-function remember(key: string, items: DiscoverItem[]): DiscoverItem[] {
-  if (cache.size >= MAX_KEYS) {
-    const oldest = cache.keys().next().value;
-    if (oldest) cache.delete(oldest);
-  }
-  cache.set(key, { at: Date.now(), items });
-  return items;
+/**
+ * The two upstream calls, behind one object so tests can swap them without a
+ * module loader. Production never touches this.
+ */
+interface Transport {
+  anilist: (variables: Record<string, unknown>) => Promise<MediaNode[]>;
+  kitsu: (url: string) => Promise<KitsuResponse>;
+}
+
+let transport: Transport = {
+  anilist: (variables) => post(variables),
+  kitsu: (url) =>
+    fetchJson<KitsuResponse>(url, {
+      accept: 'application/vnd.api+json',
+      timeoutMs: 12_000,
+      maxBytes: 512 * 1024,
+      httpsOnly: true,
+    }),
+};
+
+export function __setTransport(next: Partial<Transport>): void {
+  transport = { ...transport, ...next };
+}
+
+/** Drop every cached answer and in-flight entry. Tests only. */
+export function __resetCache(): void {
+  rows.clear();
+  suggestions.clear();
+  inflight.clear();
+}
+
+/**
+ * Read through a cache: fresh answers are returned directly, and a failed
+ * refresh falls back to a stale one. Nothing here retries; a retry storm is
+ * worse than an hour-old row on a browse surface.
+ */
+async function cached(
+  store: BoundedCache,
+  key: string,
+  load: () => Promise<DiscoverItem[]>,
+): Promise<DiscoverItem[]> {
+  const hit = store.get(key);
+  if (hit && Date.now() - hit.at < TTL) return hit.items;
+  const running = inflight.get(key);
+  if (running) return running;
+
+  const task = (async () => {
+    try {
+      const items = await load();
+      // Only cache a real answer; a transient failure should be retried next time.
+      if (items.length) store.set(key, items);
+      return items;
+    } catch (error) {
+      if (hit && Date.now() - hit.at < STALE_TTL) return hit.items;
+      throw error;
+    }
+  })().finally(() => inflight.delete(key));
+
+  inflight.set(key, task);
+  return task;
 }
 
 /**
@@ -201,32 +315,31 @@ function remember(key: string, items: DiscoverItem[]): DiscoverItem[] {
  */
 export async function discover(kind: DiscoverKind, genre?: string): Promise<DiscoverItem[]> {
   const safeGenre = genre && isGenre(genre) ? genre : undefined;
-  const key = `${kind}:${safeGenre ?? ''}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.items;
+  const effective: DiscoverKind = kind === 'genre' && !safeGenre ? 'trending' : kind;
+  const key = `${effective}:${safeGenre ?? ''}`;
 
-  const variables: Record<string, unknown> = { page: 1, perPage: MAX_ITEMS };
-  if (kind === 'genre' && safeGenre) {
-    variables.sort = ['POPULARITY_DESC'];
-    variables.genre = safeGenre;
-  } else if (kind === 'seasonal') {
-    const { season, year } = currentSeason(new Date());
-    variables.sort = ['POPULARITY_DESC'];
-    variables.season = season;
-    variables.seasonYear = year;
-  } else if (kind === 'top') {
-    variables.sort = ['SCORE_DESC'];
-  } else {
-    variables.sort = ['TRENDING_DESC'];
-  }
+  return cached(rows, key, async () => {
+    const variables: Record<string, unknown> = { page: 1, perPage: MAX_ITEMS };
+    if (effective === 'genre' && safeGenre) {
+      variables.sort = ['POPULARITY_DESC'];
+      variables.genre = safeGenre;
+    } else if (effective === 'seasonal') {
+      const { season, year } = currentSeason(new Date());
+      variables.sort = ['POPULARITY_DESC'];
+      variables.season = season;
+      variables.seasonYear = year;
+    } else if (effective === 'top') {
+      variables.sort = ['SCORE_DESC'];
+    } else {
+      variables.sort = ['TRENDING_DESC'];
+    }
 
-  const media = await post(variables);
-  const items = media
-    .map(toItem)
-    .filter((item): item is DiscoverItem => item !== null && Boolean(item.title))
-    .slice(0, MAX_ITEMS);
-  // Only cache a real answer; a transient failure should be retried next time.
-  return items.length ? remember(key, items) : items;
+    const media = await transport.anilist(variables);
+    return media
+      .map(toItem)
+      .filter((item): item is DiscoverItem => item !== null && Boolean(item.title))
+      .slice(0, MAX_ITEMS);
+  });
 }
 
 /**
@@ -240,21 +353,16 @@ export async function suggest(term: string): Promise<DiscoverItem[]> {
   const trimmed = term.trim().slice(0, LIMITS.maxSearchLength);
   if (trimmed.length < 2) return [];
   const key = `suggest:${trimmed.toLowerCase()}`;
-  const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL) return hit.items;
   if (KITSU_ENDPOINT !== 'https://kitsu.io/api/edge') throw new FetchError(500, 'Invalid Kitsu endpoint');
-  const url =
-    `${KITSU_ENDPOINT}/anime?filter[text]=${encodeURIComponent(trimmed)}&page[limit]=6`;
-  // Same guarded path as AniList: HTTPS-only, hard timeout, small body cap.
-  const parsed = await fetchJson<KitsuResponse>(url, {
-    accept: 'application/vnd.api+json',
-    timeoutMs: 12_000,
-    maxBytes: 512 * 1024,
-    httpsOnly: true,
+
+  return cached(suggestions, key, async () => {
+    const url =
+      `${KITSU_ENDPOINT}/anime?filter[text]=${encodeURIComponent(trimmed)}&page[limit]=6`;
+    // Same guarded path as AniList: HTTPS-only, hard timeout, small body cap.
+    const parsed = await transport.kitsu(url);
+    return (parsed?.data ?? [])
+      .map(toKitsuItem)
+      .filter((item): item is DiscoverItem => item !== null)
+      .slice(0, 6);
   });
-  const items = (parsed?.data ?? [])
-    .map(toKitsuItem)
-    .filter((item): item is DiscoverItem => item !== null)
-    .slice(0, 6);
-  return items.length ? remember(key, items) : items;
 }

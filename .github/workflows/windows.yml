@@ -1,0 +1,62 @@
+# Windows-only checks.
+#
+# The unit, typecheck and build steps are fully reproducible on a hosted runner
+# and are blocking. The browser and mpv suites are kept separate because they
+# depend on machine state a hosted runner does not have by default:
+#
+#   - mpv is not in the repository (tools/mpv/*.exe is git-ignored and fetched
+#     by `npm run setup:mpv`), so mpv-fallback needs that step first.
+#   - The UI/screenshot suites drive a real Edge profile and take screenshots to
+#     .tmp, which is fine but slow and occasionally flaky on a fresh image.
+#
+# They therefore run non-blocking here; a failure is visible but does not mask a
+# green unit/build result. Promote them to blocking once the runner is proven
+# stable.
+name: windows
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-verify:
+    name: windows typecheck, test, build
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Fetch mpv
+        continue-on-error: true
+        run: npm run setup:mpv
+
+      - name: Browser suites (non-blocking)
+        continue-on-error: true
+        run: npm run test:ui
