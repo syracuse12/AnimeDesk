@@ -12,6 +12,16 @@ the following software.
 | scheduler | 0.23.2 | MIT | `scheduler-LICENSE.txt` |
 | loose-envify | 1.4.0 | MIT | `loose-envify-LICENSE.txt` |
 | js-tokens | 4.0.0 | MIT | `js-tokens-LICENSE.txt` |
+| Impeccable skill (vendored, `.opencode/`) | 4.10.0 | Apache-2.0 | `licenses/Apache-2.0.txt` |
+
+### Vendored Impeccable skill
+
+`.opencode/skills/impeccable/` is an unmodified copy of the `skill-v4.10.0`
+tag of [pbakaus/impeccable](https://github.com/pbakaus/impeccable), Apache-2.0.
+It is a developer aid only: no build step reads it and nothing in it ships in
+the release payload. Its `scripts/engine-checksums.txt` pins the digests of the
+optional `impeccable` engine binary that the launchers download on first use;
+the binary itself is not committed.
 
 Node's `LICENSE` includes licence and attribution text for components in the
 runtime. The hls.js notice includes its Brightcove derived-code attribution.

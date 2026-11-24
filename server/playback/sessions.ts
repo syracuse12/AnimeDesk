@@ -57,6 +57,12 @@ interface Internal {
    * Without it a Continue Watching card has no picture to show.
    */
   coverUrl: string | null;
+  /**
+   * Quality this session resolved at. Autoplay and manual Next build a fresh
+   * PlayRequest, so without this the viewer's per-play choice would be lost at
+   * exactly the moment it matters: the next episode.
+   */
+  quality: Quality;
 }
 
 interface BeginParams {
@@ -78,7 +84,12 @@ interface BeginParams {
   /** Session this one replaces, when it was created by a hand-off. */
   supersedes?: string | null;
   coverUrl?: string;
+  /** The quality this play resolved at, carried so a hand-off keeps it. */
+  quality?: Quality;
 }
+
+/** A resolved quality preference; the union lives on PlayRequest. */
+type Quality = NonNullable<PlayRequest['quality']>;
 
 /**
  * Owns the lifetime of every playback. Autoplay is driven by a real
@@ -183,6 +194,7 @@ export class SessionManager extends EventEmitter {
       previousEpisode: previous ? { number: previous.number, label: previous.label } : null,
       supersedes,
       coverUrl: detail.coverUrl,
+      quality,
     });
   }
 
@@ -256,6 +268,7 @@ export class SessionManager extends EventEmitter {
       ended: false,
       skipsAsked: false,
       coverUrl: params.coverUrl ?? null,
+      quality: params.quality ?? store.getSettings().quality,
     };
     this.sessions.set(session.sessionId, item);
     this.publish(item);
@@ -434,6 +447,10 @@ export class SessionManager extends EventEmitter {
         episodeNumber,
         audio: item.session.audio,
         mode: item.session.mode,
+        // Carry the choice across the hand-off; a fresh request would
+        // otherwise fall back to the saved setting and change quality
+        // mid-series without the viewer asking.
+        quality: item.quality,
       },
       from,
     );
