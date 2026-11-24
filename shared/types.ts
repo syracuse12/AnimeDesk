@@ -60,6 +60,10 @@ export interface StreamSource {
   subtitleUrl?: string;
   /** Extra mpv arguments; never built from untrusted text. */
   extraArgs?: string[];
+  /** Height of the rendition actually chosen, null when the source is unvaried. */
+  resolvedHeight?: number | null;
+  /** Plain wording when the preference could not be met exactly. */
+  qualityNote?: string | null;
 }
 
 export type PlaybackState =
@@ -135,6 +139,12 @@ export interface PlaybackSession {
   hls: boolean;
   /** Same-origin proxied subtitle track, when the source offered one. */
   subtitleUrl: string | null;
+  /** The quality that was *asked* for. A preference, never a promise. */
+  quality: Settings['quality'];
+  /** Height actually served, so the UI can show fact instead of preference. */
+  resolvedHeight: number | null;
+  /** Set when the served rendition differs from the request, so it can be said. */
+  qualityNote: string | null;
   /** Opening/ending windows for this episode, when any are known. */
   skips: SkipInfo | null;
   error?: string;

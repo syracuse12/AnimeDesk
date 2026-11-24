@@ -86,6 +86,9 @@ interface BeginParams {
   coverUrl?: string;
   /** The quality this play resolved at, carried so a hand-off keeps it. */
   quality?: Quality;
+  /** Height actually served, and a note when it differs from the request. */
+  resolvedHeight?: number | null;
+  qualityNote?: string | null;
 }
 
 /** A resolved quality preference; the union lives on PlayRequest. */
@@ -195,6 +198,8 @@ export class SessionManager extends EventEmitter {
       supersedes,
       coverUrl: detail.coverUrl,
       quality,
+      resolvedHeight: stream.resolvedHeight ?? null,
+      qualityNote: stream.qualityNote ?? null,
     });
   }
 
@@ -253,6 +258,9 @@ export class SessionManager extends EventEmitter {
       hls: /\.m3u8(\?|$)/i.test(params.url),
       subtitleUrl:
         params.mode === 'embedded' ? subtitlePath : null,
+      quality: params.quality ?? store.getSettings().quality,
+      resolvedHeight: params.resolvedHeight ?? null,
+      qualityNote: params.qualityNote ?? null,
       skips: null,
       startedAt: Date.now(),
     };

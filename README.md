@@ -172,8 +172,10 @@ See [docs/LICENSING.md](docs/LICENSING.md).
   card is a search shortcut, not a playable link.
 - The local provider labels every file as sub+dub; it only knows filenames.
 - No downloads or offline cache, no MAL/AniList sync, no cross-series queue.
-- The quality setting prefers a matching HLS variant; it is a preference, not a
-  guarantee.
+- The quality setting is a preference, not a guarantee. An exact rendition is
+  used when it exists; otherwise the highest rendition at or below it, and the
+  lowest one if every rendition is larger. Any substitution is stated in the
+  player rather than left to look like the preference was honoured.
 - Loopback guards do not authenticate other processes running as the same user.
   AnimeDesk is not designed to be exposed on a network.
 

@@ -7,6 +7,7 @@
  */
 import { cleanText, fetchText, FetchError, absoluteUrl } from '../http.ts';
 import { LIMITS } from '../config.ts';
+import { parseVariants, pickVariant } from '../quality.ts';
 import { lookupArtwork } from '../anilist.ts';
 import type { AnimeDetail, AudioMode, Episode, SearchResult, StreamSource } from '../../shared/types.ts';
 import { ProviderError, type Provider } from './types.ts';
@@ -227,30 +228,22 @@ async function listServers(episodeId: string): Promise<ServerEntry[]> {
   return entries;
 }
 
-/** Pick the requested quality out of a master playlist. */
-async function pickVariant(masterUrl: string, referer: string, quality: string): Promise<string> {
+/**
+ * Pick the requested quality out of a master playlist.
+ *
+ * The selection rules live in `../quality.ts` so they can be tested without a
+ * network, and so the fallback is reported rather than hidden: a 480p request
+ * against a 1080p/720p manifest must play 720p and say that it did.
+ */
+async function chooseVariant(
+  masterUrl: string,
+  referer: string,
+  quality: string,
+): Promise<{ url: string; height: number | null; note: string | null }> {
   const playlist = await fetchText(masterUrl, { referer, accept: 'application/vnd.apple.mpegurl' });
   const base = masterUrl.slice(0, masterUrl.lastIndexOf('/') + 1);
-
-  const variants: { height: number; url: string }[] = [];
-  const lines = playlist.split('\n');
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i]?.trim() ?? '';
-    if (!line.startsWith('#EXT-X-STREAM-INF')) continue;
-    if (/EXT-X-I-FRAME/.test(line)) continue;
-    const height = Number(line.match(/RESOLUTION=\d+x(\d+)/)?.[1] ?? 0);
-    const next = lines[i + 1]?.trim() ?? '';
-    if (!next || next.startsWith('#')) continue;
-    const url = absoluteUrl(next, base);
-    if (url) variants.push({ height, url });
-  }
-  if (!variants.length) return masterUrl;
-
-  variants.sort((a, b) => b.height - a.height);
-  if (quality === 'worst') return variants[variants.length - 1]?.url ?? masterUrl;
-  if (quality === 'best') return variants[0]?.url ?? masterUrl;
-  const wanted = Number(quality);
-  return variants.find((variant) => variant.height === wanted)?.url ?? variants[0]?.url ?? masterUrl;
+  const pick = pickVariant(parseVariants(playlist, base, absoluteUrl), quality, masterUrl);
+  return { url: pick.url, height: pick.height, note: pick.note };
 }
 
 async function resolve(
@@ -296,11 +289,13 @@ async function resolve(
       if (!masterUrl) continue;
 
       const subtitle = json.match(/"subtitles":\[[\s\S]*?"src":"([^"]*?\.vtt[^"]*)"/)?.[1];
-      const url = await pickVariant(masterUrl, referer, quality);
+      const chosen = await chooseVariant(masterUrl, referer, quality);
       return {
-        url,
+        url: chosen.url,
         referer,
         subtitleUrl: subtitle ? (absoluteUrl(subtitle, referer) ?? undefined) : undefined,
+        resolvedHeight: chosen.height,
+        qualityNote: chosen.note,
       };
     } catch (error) {
       lastError = error as Error;
