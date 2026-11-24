@@ -288,12 +288,15 @@ async function resolve(
       const masterUrl = absoluteUrl(master, referer);
       if (!masterUrl) continue;
 
-      const subtitle = json.match(/"subtitles":\[[\s\S]*?"src":"([^"]*?\.vtt[^"]*)"/)?.[1];
+      const entry = json.match(/"subtitles":\[\s*\{([\s\S]*?)\}/)?.[1];
+      const subtitle = entry?.match(/"src":"([^"]*?\.vtt[^"]*)"/)?.[1];
+      const subtitleLang = entry?.match(/"lang":"([A-Za-z-]{2,12})"/)?.[1];
       const chosen = await chooseVariant(masterUrl, referer, quality);
       return {
         url: chosen.url,
         referer,
         subtitleUrl: subtitle ? (absoluteUrl(subtitle, referer) ?? undefined) : undefined,
+        subtitleLang,
         resolvedHeight: chosen.height,
         qualityNote: chosen.note,
       };

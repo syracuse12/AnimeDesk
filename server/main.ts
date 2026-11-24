@@ -277,6 +277,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
       audio: audioOf(body.audio),
       episodeNumber: Number(body.episodeNumber) || 1,
       subtitleUrl: body.subtitleUrl ? String(body.subtitleUrl) : undefined,
+      subtitleLang: body.subtitleLang ? String(body.subtitleLang) : undefined,
     };
     // Direct URLs bypass provider detail/resolve entirely.
     const { directStart } = await import('./playback/direct.ts');

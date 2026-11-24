@@ -26,6 +26,7 @@ function session(patch: Partial<PlaybackSession> = {}): PlaybackSession {
     streamUrl: '/api/stream/token',
     hls: true,
     subtitleUrl: null,
+    subtitleLang: null,
     quality: 'best',
     resolvedHeight: null,
     qualityNote: null,

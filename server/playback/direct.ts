@@ -23,6 +23,7 @@ export async function directStart(
     audio: request.audio,
     url: request.url,
     subtitleUrl: request.subtitleUrl,
+    subtitleLang: request.subtitleLang,
     volume: settings.volume,
     mode: resolved,
   });
