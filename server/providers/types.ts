@@ -14,7 +14,8 @@ export interface Provider {
   /**
    * Resolve one episode. `audio` may be downgraded by the caller when absent,
    * and `quality` is the viewer's preference ('best', '1080', 'worst', ...).
-   * Providers that only serve one rendition may ignore it.
+   * Providers that only serve one rendition may ignore it; one that does
+   * honour it reports the rendition it actually chose.
    */
   resolve(
     id: string,

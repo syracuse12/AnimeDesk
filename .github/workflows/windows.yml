@@ -60,3 +60,9 @@ jobs:
       - name: Browser suites (non-blocking)
         continue-on-error: true
         run: npm run test:ui
+
+      # Suggestions, discovery, quality hand-off and Back-to-origin. Needs the
+      # live upstreams, so it stays non-blocking for the same reason as above.
+      - name: Focused browser QA (non-blocking)
+        continue-on-error: true
+        run: npm run test:qa-ux

@@ -406,6 +406,12 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
         <div className="stage-badge">{session.mode === 'embedded' ? 'In app' : 'mpv'}</div>
       </div>
 
+      {session.qualityNote && (
+        <div className="stage-quality-note" role="status">
+          {session.qualityNote}
+        </div>
+      )}
+
       {skipKind && (
         <button className={`skip-btn ${skipKind}`} onClick={() => skip(skipKind)}>
           {skipKind === 'intro' ? 'Skip intro' : 'Skip outro'}
