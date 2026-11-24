@@ -8,6 +8,8 @@ import type {
   AnimeDetail,
   AppStatus,
   AudioMode,
+  DiscoverItem,
+  DiscoverKind,
   Episode,
   HistoryEntry,
   HomeFeed,
@@ -23,6 +25,26 @@ type View = 'home' | 'search' | 'detail' | 'watch' | 'history' | 'settings';
 const EMPTY_FEED: HomeFeed = { continueWatching: [], recentlyWatched: [], featured: [] };
 const SEARCH_DEBOUNCE = 320;
 const QUICK_TERMS = ['One Piece', 'Frieren', 'Jujutsu Kaisen', 'Attack on Titan', 'Spy x Family'];
+const SUGGEST_DEBOUNCE = 200;
+
+/** Genres offered on the browse strip; AniList uses exactly these spellings. */
+const GENRES = [
+  'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Mystery',
+  'Romance', 'Sci-Fi', 'Slice of Life', 'Sports', 'Supernatural', 'Thriller',
+];
+
+const ROW_SUB: Record<'trending' | 'top' | 'seasonal', string> = {
+  trending: 'What people are watching',
+  top: 'Highest rated of all time',
+  seasonal: 'Airing this cour',
+};
+
+interface DiscoverRow {
+  kind: DiscoverKind;
+  title: string;
+  sub: string;
+  items: DiscoverItem[];
+}
 
 interface Toast {
   id: number;
@@ -49,6 +71,15 @@ export function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState<{ intro: SkipRange | null; outro: SkipRange | null } | null>(null);
+  const [discover, setDiscover] = useState<DiscoverRow[]>([]);
+  const [discoverGenre, setDiscoverGenre] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<DiscoverItem[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestActive, setSuggestActive] = useState(-1);
+  const [origin, setOrigin] = useState<View>('home');
+  const [quality, setQuality] = useState<Settings['quality']>('best');
+
+  const suggestSeq = useRef(0);
   const sessionRef = useRef<PlaybackSession | null>(null);
   const detailRef = useRef<AnimeDetail | null>(null);
   const toastId = useRef(0);
@@ -73,6 +104,7 @@ export function App() {
       setStatus(next);
       setSettings(next.settings);
       setAudio(next.settings.preferredAudio);
+      setQuality(next.settings.quality);
     } catch (error) {
       toast(`Service unreachable: ${(error as Error).message}`);
     }
@@ -101,6 +133,66 @@ export function App() {
     void loadHistory();
     void loadFeed();
   }, [loadStatus, loadHistory, loadFeed]);
+
+  // Discovery is metadata only; it paints the browse rows and every card
+  // carries the title to search a real provider for. It never blocks the home
+  // feed, and an empty answer just leaves the rows out.
+  useEffect(() => {
+    if (status && !status.providers.some((item) => item.id !== 'local')) return;
+    let live = true;
+    const kinds: (keyof typeof ROW_SUB)[] = ['trending', 'top', 'seasonal'];
+    const load = async () => {
+      const settled = await Promise.allSettled(
+        kinds.map(async (kind) => ({ kind, items: (await api.discover(kind)).items })),
+      );
+      if (!live) return;
+      setDiscover(
+        settled
+          .flatMap((outcome) => (outcome.status === 'fulfilled' ? [outcome.value] : []))
+          .filter((row) => row.items.length > 0)
+          .map((row) => ({
+            kind: row.kind,
+            title: row.kind === 'trending' ? 'Trending now' : row.kind === 'top' ? 'Top rated' : 'This season',
+            sub: ROW_SUB[row.kind],
+            items: row.items,
+          })),
+      );
+    };
+    void load();
+    return () => {
+      live = false;
+    };
+  }, [status]);
+
+  // Genre browsing replaces the rows with one filtered row.
+  const loadGenre = useCallback(async (genre: string) => {
+    setDiscoverGenre(genre);
+    try {
+      const { items } = await api.discover('genre', genre);
+      setDiscover([{ kind: 'genre', title: genre, sub: 'Most popular in this genre', items }]);
+    } catch (error) {
+      toast((error as Error).message);
+    }
+  }, [toast]);
+
+  // Suggestions follow the query, debounced, and only while the box has focus.
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2 || !suggestOpen) {
+      setSuggestions([]);
+      return;
+    }
+    const seq = (suggestSeq.current += 1);
+    const timer = window.setTimeout(async () => {
+      try {
+        const { items } = await api.suggest(term);
+        if (seq === suggestSeq.current) setSuggestions(items);
+      } catch {
+        if (seq === suggestSeq.current) setSuggestions([]);
+      }
+    }, SUGGEST_DEBOUNCE);
+    return () => window.clearTimeout(timer);
+  }, [query, suggestOpen]);
 
   // Session updates are pushed by the service; the player is a mirror.
   useEffect(() => {
@@ -132,6 +224,7 @@ export function App() {
       const trimmed = (term ?? query).trim();
       const key = `${provider}|${trimmed}`;
       lastRun.current = key;
+      setSuggestOpen(false);
       const seq = (searchSeq.current += 1);
       setSearching(true);
       setSearchErrors([]);
@@ -165,6 +258,7 @@ export function App() {
   const openDetail = useCallback(
     async (providerId: ProviderId, id: string) => {
       const seq = detailSeq.current.next();
+      setOrigin(view === 'detail' ? origin : view);
       setDetailLoading(true);
       setDetail(null);
       setView('detail');
@@ -196,6 +290,7 @@ export function App() {
           episodeNumber: episode.number,
           audio,
           startAt,
+          quality,
         });
         setSession(response.session);
       } catch (error) {
@@ -356,14 +451,16 @@ export function App() {
           </span>
         </button>
 
-        <form
-          className="rail-search"
-          role="search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void runSearch();
-          }}
-        >
+        <div className="rail-search-wrap">
+          <form
+            className="rail-search"
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSuggestOpen(false);
+              void runSearch();
+            }}
+          >
           <button type="button" className="mobile-search-trigger" onClick={() => setView('search')} aria-label="Search catalogue">
             <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
               <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
@@ -379,13 +476,38 @@ export function App() {
             onChange={(event) => {
               setQuery(event.target.value);
               setView('search');
+              setSuggestOpen(true);
+              setSuggestActive(-1);
             }}
             onFocus={() => {
               if (view !== 'search') setView('search');
+              setSuggestOpen(true);
+            }}
+            onBlur={() => window.setTimeout(() => setSuggestOpen(false), 120)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setSuggestOpen(false);
+                return;
+              }
+              if (!suggestions.length) return;
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const step = event.key === 'ArrowDown' ? 1 : -1;
+                setSuggestActive((current) => Math.min(suggestions.length - 1, Math.max(-1, current + step)));
+              } else if (event.key === 'Enter' && suggestActive >= 0) {
+                const pick = suggestions[suggestActive];
+                if (pick) {
+                  event.preventDefault();
+                  setSuggestOpen(false);
+                  goSearch(pick.searchTitle);
+                }
+              }
             }}
             placeholder="Search anime"
             maxLength={120}
             aria-label="Search anime"
+            aria-expanded={suggestOpen && suggestions.length > 0}
+            aria-autocomplete="list"
             enterKeyHint="search"
           />
           {query && (
@@ -406,6 +528,34 @@ export function App() {
             </button>
           )}
         </form>
+
+        {suggestOpen && suggestions.length > 0 && (
+          <ul className="suggest" role="listbox" aria-label="Title suggestions">
+            {suggestions.map((item, index) => (
+              <li key={item.id ?? item.title} role="option" aria-selected={index === suggestActive}>
+                <button
+                  type="button"
+                  className={index === suggestActive ? 'suggest-row active' : 'suggest-row'}
+                  onMouseEnter={() => setSuggestActive(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setSuggestOpen(false);
+                    goSearch(item.searchTitle);
+                  }}
+                >
+                  <span className="suggest-art">
+                    {item.coverUrl && <img src={item.coverUrl} alt="" referrerPolicy="no-referrer" onError={(event) => { event.currentTarget.hidden = true; }} />}
+                  </span>
+                  <span className="suggest-text">
+                    <strong>{item.title}</strong>
+                    <small>{[item.year, item.format].filter(Boolean).join(' \u00b7 ') || 'Anime'}</small>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        </div>
 
         <nav className="rail-nav" aria-label="Main">
           <RailLink active={view === 'home'} onClick={() => setView('home')} label="Home" icon={<HomeIcon />} />
@@ -453,7 +603,17 @@ export function App() {
 
       <main className="main" id="main" ref={mainRef} tabIndex={-1}>
         {view === 'home' && (
-          <Home feed={feed} loading={feedLoading} onOpen={openDetail} onResume={playFromHistory} onBrowse={() => void runSearch('')} onSearch={goSearch} />
+          <Home
+            feed={feed}
+            loading={feedLoading}
+            discover={discover}
+            genre={discoverGenre}
+            onGenre={loadGenre}
+            onOpen={openDetail}
+            onResume={playFromHistory}
+            onBrowse={() => void runSearch('')}
+            onSearch={goSearch}
+          />
         )}
 
         {view === 'search' && (
@@ -547,7 +707,9 @@ export function App() {
             currentEpisode={session?.episodeNumber ?? null}
             watched={watched.get(`${detail.provider}:${detail.id}`)}
             onPlay={playEpisode}
-            onBack={() => setView('search')}
+            onBack={() => setView(origin)}
+            quality={quality}
+            setQuality={setQuality}
             manual={manual}
             onSaveManual={saveManualSkip}
           />
@@ -612,6 +774,18 @@ export function App() {
             <ul className="rows">
               {history.map((entry) => (
                 <li key={entry.key}>
+                  <div className="row-thumb">
+                    <span className="poster-fallback">{entry.animeTitle.slice(0, 2)}</span>
+                    {entry.coverUrl && (
+                      <img
+                        src={entry.coverUrl}
+                        alt=""
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => { event.currentTarget.hidden = true; }}
+                      />
+                    )}
+                  </div>
                   <div className="row-main">
                     <strong>
                       {entry.animeTitle} · {entry.episodeLabel}
@@ -812,6 +986,9 @@ function gridKeys(event: ReactKeyboardEvent<HTMLDivElement>) {
 function Home({
   feed,
   loading,
+  discover,
+  genre,
+  onGenre,
   onOpen,
   onResume,
   onBrowse,
@@ -819,6 +996,9 @@ function Home({
 }: {
   feed: HomeFeed;
   loading: boolean;
+  discover: DiscoverRow[];
+  genre: string | null;
+  onGenre: (genre: string) => Promise<void>;
   onOpen: (provider: ProviderId, id: string) => Promise<void>;
   onResume: (entry: HistoryEntry) => Promise<void>;
   onBrowse: () => void;
@@ -869,6 +1049,21 @@ function Home({
         </header>
       )}
 
+      {discover.length > 0 && (
+        <div className="genre-strip" role="group" aria-label="Browse by genre">
+          {GENRES.map((name) => (
+            <button
+              key={name}
+              className={genre === name ? 'genre-chip active' : 'genre-chip'}
+              aria-pressed={genre === name}
+              onClick={() => void onGenre(name)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {feed.continueWatching.length > 0 && (
         <Row title="Continue watching" sub="Pick up where you stopped">
           {feed.continueWatching.map((entry) => (
@@ -898,6 +1093,27 @@ function Home({
           ))}
         </Row>
       )}
+
+      {discover.map((row) => (
+        <section className="row-block discover-row" key={`${row.kind}:${row.title}`}>
+          <header className="row-head">
+            <h2>{row.title}</h2>
+            <span>{row.sub}</span>
+          </header>
+          <div className="row-scroll">
+            {row.items.map((item) => (
+              <PosterCard
+                key={item.id ?? item.title}
+                title={item.title}
+                cover={item.coverUrl}
+                meta={[item.year, item.format, item.score ? `${item.score}%` : ''].filter(Boolean).join(' \u00b7 ')}
+                onClick={() => onSearch(item.searchTitle)}
+              />
+            ))}
+          </div>
+          <p className="row-note">Tap a title to search the catalogue for it.</p>
+        </section>
+      ))}
 
       <Row title="Quick search" sub="One tap">
         {QUICK_TERMS.map((term) => (
@@ -994,6 +1210,8 @@ function DetailPage({
   watched,
   onPlay,
   onBack,
+  quality,
+  setQuality,
   manual,
   onSaveManual,
 }: {
@@ -1007,6 +1225,8 @@ function DetailPage({
   watched?: HistoryEntry;
   onPlay: (episode: Episode, startAt?: number) => Promise<void>;
   onBack: () => void;
+  quality: Settings['quality'];
+  setQuality: (quality: Settings['quality']) => void;
   manual: { intro: SkipRange | null; outro: SkipRange | null } | null;
   onSaveManual: (intro: SkipRange | null, outro: SkipRange | null) => Promise<void>;
 }) {
@@ -1073,6 +1293,20 @@ function DetailPage({
                   English dub
                 </button>
               </div>
+              <label className="quality-pick">
+                <span>Quality</span>
+                <select
+                  value={quality}
+                  onChange={(event) => setQuality(event.target.value as Settings['quality'])}
+                  aria-label="Stream quality for the next episode"
+                >
+                  <option value="best">Best</option>
+                  <option value="1080">1080p</option>
+                  <option value="720">720p</option>
+                  <option value="480">480p</option>
+                  <option value="worst">Lowest</option>
+                </select>
+              </label>
             </div>
 
             {!detail.availableAudio.includes('dub') && (

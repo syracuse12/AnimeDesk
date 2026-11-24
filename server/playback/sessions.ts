@@ -148,7 +148,8 @@ export class SessionManager extends EventEmitter {
       : (detail.availableAudio[0] ?? 'sub');
 
     const mode = this.pickMode(request.mode);
-    const stream = await provider.resolve(request.animeId, episode.number, audio);
+    const quality = request.quality ?? store.getSettings().quality;
+    const stream = await provider.resolve(request.animeId, episode.number, audio, quality);
 
     const index = detail.episodes.findIndex((item) => item.number === episode.number);
     const next = index >= 0 ? detail.episodes[index + 1] : undefined;

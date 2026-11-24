@@ -2,6 +2,8 @@ import type {
   AnimeDetail,
   AppStatus,
   AudioMode,
+  DiscoverItem,
+  DiscoverKind,
   HistoryEntry,
   HomeFeed,
   PlaybackMode,
@@ -49,6 +51,14 @@ export const api = {
     ),
   detail: (provider: string, id: string) =>
     request<{ anime: AnimeDetail }>(`/anime/${provider}/${encodeURIComponent(id)}`),
+  discover: (kind: DiscoverKind, genre?: string) =>
+    request<{ items: DiscoverItem[] }>(
+      `/discover?kind=${encodeURIComponent(kind)}${genre ? `&genre=${encodeURIComponent(genre)}` : ''}`,
+    ),
+  suggest: (term: string) =>
+    request<{ items: DiscoverItem[] }>(`/suggest?q=${encodeURIComponent(term)}`),
+  resetSettings: () => request<{ settings: Settings }>('/settings', { method: 'DELETE' }),
+  resetHistory: () => request<{ ok: boolean }>('/history', { method: 'DELETE' }),
   play: (body: {
     provider: string;
     animeId: string;
@@ -56,6 +66,7 @@ export const api = {
     audio: AudioMode;
     startAt?: number;
     mode?: PlaybackMode;
+    quality?: Settings['quality'];
   }) => request<{ session: PlaybackSession }>('/play', { method: 'POST', body: JSON.stringify(body) }),
   direct: (body: { title: string; url: string; audio: AudioMode; subtitleUrl?: string; mode?: PlaybackMode }) =>
     request<{ session: PlaybackSession }>('/direct', { method: 'POST', body: JSON.stringify(body) }),

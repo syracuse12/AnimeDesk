@@ -11,8 +11,17 @@ export interface Provider {
   info: ProviderInfo;
   search(query: string): Promise<SearchResult[]>;
   detail(id: string): Promise<AnimeDetail>;
-  /** Resolve one episode. `audio` may be downgraded by the caller when absent. */
-  resolve(id: string, episodeNumber: number, audio: AudioMode): Promise<StreamSource>;
+  /**
+   * Resolve one episode. `audio` may be downgraded by the caller when absent,
+   * and `quality` is the viewer's preference ('best', '1080', 'worst', ...).
+   * Providers that only serve one rendition may ignore it.
+   */
+  resolve(
+    id: string,
+    episodeNumber: number,
+    audio: AudioMode,
+    quality?: 'best' | '1080' | '720' | '480' | 'worst',
+  ): Promise<StreamSource>;
   /** Cheap readiness probe used by /api/status. */
   ready(): Promise<boolean>;
 }

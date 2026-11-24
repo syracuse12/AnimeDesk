@@ -4,9 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { deobfuscate, titleFromPage, coverFromPage } from '../server/providers/hianime.ts';
 import { assertHttpUrl, cleanText, absoluteUrl, originOf } from '../server/http.ts';
+import { GENRES, isGenre, toItem } from '../server/discover.ts';
 import { normalizeLocalPath } from '../server/paths.ts';
 import { Store } from '../server/store.ts';
-import { DEFAULT_SETTINGS } from '../server/config.ts';
+import { DEFAULT_SETTINGS, LIMITS } from '../server/config.ts';
 
 const fixtures = path.join(import.meta.dirname, 'fixtures');
 const blob = fs.readFileSync(path.join(fixtures, 'embed-blob.txt'), 'utf8').trim();
@@ -183,4 +184,87 @@ test('removing a history key reports whether it existed', async () => {
     updatedAt: 1,
   });
   assert.equal(await store.removeHistory('k'), true);
+});
+
+/* ---------- discovery ---------- */
+
+test('toItem prefers the English title and searches with the romaji one', () => {
+  const item = toItem({
+    id: 21,
+    title: { romaji: 'One Piece', english: 'One Piece' },
+    episodes: 1100,
+    seasonYear: 1999,
+    averageScore: 88,
+    genres: ['Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy'],
+    status: 'RELEASING',
+    format: 'TV',
+  });
+  assert.equal(item?.title, 'One Piece');
+  assert.equal(item?.searchTitle, 'One Piece');
+  assert.equal(item?.id, '21');
+  assert.equal(item?.episodes, 1100);
+  assert.equal(item?.year, '1999');
+  assert.equal(item?.score, 88);
+  // AniList statuses and formats arrive SCREAMING_SNAKE; the UI wants prose.
+  assert.equal(item?.status, 'releasing');
+  assert.equal(item?.format, 'TV');
+  assert.equal(item?.genres?.length, 4);
+});
+
+test('toItem falls back to the romaji title when no English title exists', () => {
+  const item = toItem({ title: { romaji: 'Sousou no Frieren', english: null } });
+  assert.equal(item?.title, 'Sousou no Frieren');
+  assert.equal(item?.searchTitle, 'Sousou no Frieren');
+});
+
+test('toItem strips release qualifiers from the provider search title', () => {
+  const item = toItem({ title: { romaji: 'Bleach (TV)', english: 'Bleach' } });
+  assert.equal(item?.title, 'Bleach');
+  assert.equal(item?.searchTitle, 'Bleach');
+});
+
+test('toItem rejects a node with no usable title', () => {
+  assert.equal(toItem({}), null);
+  assert.equal(toItem({ title: { romaji: '   ', english: '' } }), null);
+  assert.equal(toItem({ title: { romaji: 'x'.repeat(201) } }), null);
+});
+
+test('toItem keeps only https artwork', () => {
+  const item = toItem({
+    title: { romaji: 'A' },
+    coverImage: { extraLarge: 'http://insecure/x.jpg', large: 'https://secure/l.jpg' },
+    bannerImage: 'https://secure/b.jpg',
+  });
+  assert.equal(item?.coverUrl, 'https://secure/l.jpg');
+  assert.equal(item?.bannerUrl, 'https://secure/b.jpg');
+});
+
+test('toItem flattens markup and caps the synopsis', () => {
+  const item = toItem({
+    title: { romaji: 'A' },
+    description: `line one<br>line two<br />line three ${'word '.repeat(400)}`,
+  });
+  assert.ok(item?.description?.startsWith('line one line two line three'));
+  assert.ok((item?.description?.length ?? 0) <= LIMITS.maxDescriptionLength);
+});
+
+test('toItem ignores impossible numbers and non-string genres', () => {
+  const item = toItem({
+    title: { romaji: 'A' },
+    episodes: 0,
+    seasonYear: 12,
+    averageScore: 0,
+    genres: ['Action', null, 7 as unknown as string],
+  });
+  assert.equal(item?.episodes, undefined);
+  assert.equal(item?.year, undefined);
+  assert.equal(item?.score, undefined);
+  assert.deepEqual(item?.genres, ['Action']);
+});
+
+test('the genre whitelist is exact and case sensitive', () => {
+  assert.equal(GENRES.includes('Sci-Fi'), true);
+  assert.equal(isGenre('Sci-Fi'), true);
+  assert.equal(isGenre('science fiction'), false);
+  assert.equal(isGenre(''), false);
 });

@@ -194,6 +194,8 @@ export interface PlayRequest {
   audio: AudioMode;
   startAt?: number;
   mode?: PlaybackMode;
+  /** Per-request quality override; falls back to the saved setting. */
+  quality?: Settings['quality'];
 }
 
 export interface PlayResponse {
@@ -213,6 +215,28 @@ export interface HomeFeed {
   recentlyWatched: HistoryEntry[];
   featured: AnimeDetail[];
   errors?: string[];
+}
+
+/** Rows the discovery surface can ask for. Metadata only, never availability. */
+export type DiscoverKind = 'trending' | 'seasonal' | 'top' | 'genre';
+
+/**
+ * One AniList discovery card. `searchTitle` is the text the UI searches a
+ * provider with, so a card can be opened without pretending it is playable.
+ */
+export interface DiscoverItem {
+  id?: string;
+  title: string;
+  searchTitle: string;
+  coverUrl?: string;
+  bannerUrl?: string;
+  description?: string;
+  format?: string;
+  year?: string;
+  episodes?: number;
+  score?: number;
+  genres?: string[];
+  status?: string;
 }
 
 export interface ApiError {
