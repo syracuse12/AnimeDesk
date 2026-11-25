@@ -46,3 +46,7 @@ SHASUMS256.txt
 
 # --- local snapshot copies: backup/ re-copied itself, keep only the outermost snapshot ---
 backup/*/backup/
+
+# --- the project-local Impeccable skill needs its small data dir to run ---
+!.opencode/skills/impeccable/scripts/data/
+!.opencode/skills/impeccable/scripts/data/**
