@@ -18,15 +18,16 @@ data/
 !.env.example
 
 # --- bundled mpv binaries (large, re-fetchable via npm run setup:mpv) ---
-tools/mpv/*.exe
-tools/mpv/*.dll
-tools/mpv/*.com
-tools/mpv/doc/
-tools/mpv/installer/
-tools/mpv/*.7z
-!tools/mpv/mpv-register.bat
-!tools/mpv/mpv-unregister.bat
-!tools/mpv/updater.bat
+# patterns are not root-relative so they also apply inside backup/ snapshots
+**/tools/mpv/*.exe
+**/tools/mpv/*.dll
+**/tools/mpv/*.com
+**/tools/mpv/doc/
+**/tools/mpv/installer/
+**/tools/mpv/*.7z
+!**/tools/mpv/mpv-register.bat
+!**/tools/mpv/mpv-unregister.bat
+!**/tools/mpv/updater.bat
 
 # --- OS and editor noise ---
 Thumbs.db
@@ -38,11 +39,10 @@ desktop.ini
 
 # --- build artifacts kept out of source history ---
 *.exe
-!tools/mpv/mpv-register.bat
 *.zip
 *.msi
 payload-manifest.json
 SHASUMS256.txt
 
-# --- local snapshot copies: backup/ re-copied itself, so keep only the outermost snapshot ---
+# --- local snapshot copies: backup/ re-copied itself, keep only the outermost snapshot ---
 backup/*/backup/
