@@ -70,7 +70,7 @@ export const LIMITS = {
   maxPlaybackRate: 3,
 } as const;
 
-export const VERSION = '0.2.4';
+export const VERSION = '0.3.0';
 
 /** Providers are separated so the UI can label and gate them honestly. */
 export const PROVIDER_TIMEOUT = 25_000;

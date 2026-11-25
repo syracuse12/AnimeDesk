@@ -59,9 +59,18 @@ The UI is a local React page. The backend is a local Node service bound to
   decode. `npm run setup:mpv` fetches a verified build into `tools\mpv`.
 
 Nothing is installed system-wide. Application data goes to
-`%APPDATA%\AnimeDesk`; the browser profile goes to `%LOCALAPPDATA%\AnimeDesk`.
+`%APPDATA%\AnimeDesk`; the WebView2 profile goes to `%LOCALAPPDATA%\AnimeDesk`.
 
 ## Install and run
+
+**To just use it:** download `AnimeDesk-Setup-<version>.exe` from
+[Releases](https://github.com/syracuse12/AnimeDesk/releases) and run it. It
+installs under your user account with no admin rights, adds a Desktop shortcut,
+and uninstalls from Settings > Apps. The installer is unsigned, so SmartScreen
+will say "Windows protected your PC" — choose **More info > Run anyway**. Compare
+the file against the `SHA256SUMS.txt` on the release if you want to be sure.
+
+**From source:**
 
 ```powershell
 git clone https://github.com/syracuse12/AnimeDesk.git
@@ -167,9 +176,8 @@ See [docs/LICENSING.md](docs/LICENSING.md).
 - AniSkip needs a MyAnimeList id, matched through AniList by exact title. A
   differently named series gets no timestamps rather than wrong ones; manual
   ranges cover that case.
-- Discovery rows come from AniList and suggestions from Kitsu, so both are
-  unavailable in the `distribution` profile and while the network is down. A
-  card is a search shortcut, not a playable link.
+- Discovery rows come from AniList and suggestions from Kitsu, so both need the
+  network. A card is a search shortcut, not a playable link.
 - The local provider labels every file as sub+dub; it only knows filenames.
 - No downloads or offline cache, no MAL/AniList sync, no cross-series queue.
 - The quality setting is a preference, not a guarantee. An exact rendition is
