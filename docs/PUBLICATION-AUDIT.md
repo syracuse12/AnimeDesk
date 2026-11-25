@@ -8,6 +8,8 @@ Nothing was pushed or uploaded. The private development repository was not edite
 
 - Removed the optional private model launcher, connectivity test, model config,
   and credential examples from the public tree. No credential file was opened.
+  These were later removed from the complete history as well, not only the tip;
+  see the history rewrite note below.
 - Replaced the earlier publication report that disclosed a developer path and
   incorrectly accepted that disclosure. The README and current docs use generic
   or environment-based paths.
@@ -19,6 +21,18 @@ Nothing was pushed or uploaded. The private development repository was not edite
 - Created a new root commit after these repairs; the prior sensitive commit is
   not an ancestor of the publication branch. The root hash is reported separately
   because embedding it in its own commit would be circular.
+
+## Later history rewrite
+
+On 25 November 2026 the publication history was rewritten a second time with
+`git filter-repo`, after the launcher, model config, agent instructions, the
+vendored Impeccable skill and a v0.1.0 source snapshot had been committed and
+then dropped at the tip. `--invert-paths` removed those paths from every commit,
+so they are absent from all reachable history rather than only the newest tree.
+Every commit hash changed and both branches were force-pushed. A pre-rewrite
+bundle was kept locally. `git log --all` for any removed path is now empty, and a
+history-wide text search returns no developer path, Windows username or internal
+hostname. The tracked tree is now project files only.
 
 ## Secret and privacy scans
 
@@ -62,7 +76,9 @@ recover every possible runtime value.
   notices cover the libraries actually bundled into its UI and Node runtime.
 - `npm audit --json` reported zero vulnerabilities at every severity on this
   date. This is a point-in-time advisory check, not a guarantee.
-- No GitHub Actions workflow is in the snapshot; issue and PR templates only.
+- The snapshot carries two GitHub Actions workflows, `ci.yml` and `windows.yml`,
+  alongside the issue and PR templates. They postdate the original audit and were
+  not part of its scope.
 - The release payload contains 36 files. It contains no private application
   state, local media, mpv or FFmpeg binary, or remote provider implementation.
   The installer embeds exactly the same payload zip, verified by SHA-256.
@@ -74,7 +90,9 @@ recover every possible runtime value.
 
 ## Verification
 
-- `npm run verify`: typecheck passed, 97/97 tests passed, production build passed.
+- `npm run verify`: typecheck passed, 177/177 tests passed, production build
+  passed. (97/97 at the time of the audit; the count rose with the discovery,
+  quality, subtitle and player-recovery suites.)
 - `npm run test:ui`: 22/22 stages passed.
 - `npm run test:qa`: AniSkip map 11/11, autoplay 21/21, persistence 13/13,
   mpv fallback 11/11, screenshot and corrupt-file stages passed.
