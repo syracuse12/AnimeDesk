@@ -13,6 +13,11 @@ function Assert-ReleasePath([string] $candidate) {
 }
 Assert-ReleasePath $stage
 $nodeVersion = 'v24.18.0'
+# The version is single-sourced from package.json so a tag cannot drift from the
+# artifact name.
+$version = (Get-Content -Raw (Join-Path $root 'package.json') | ConvertFrom-Json).version
+if (-not $version) { throw 'package.json has no version.' }
+$installerName = "AnimeDesk-Setup-$version.exe"
 $nodeArchive = "node-$nodeVersion-win-x64.zip"
 $pinnedNodeSha256 = '0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821'
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
@@ -83,9 +88,9 @@ try {
     $payloadZip = Join-Path $out 'AnimeDesk-payload.zip'
     if (Test-Path -LiteralPath $payloadZip) { Remove-Item -LiteralPath $payloadZip -Force }
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $payloadZip -CompressionLevel Optimal
-    & $csc /nologo /target:winexe /main:Setup /out:"$(Join-Path $out 'AnimeDesk-Setup-0.2.4.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "/r:$wvCore" "/r:$wvForms" "/resource:$payloadZip,AnimeDeskPayload" (Join-Path $root 'installer\AppHost.cs') (Join-Path $root 'installer\Setup.cs')
+    & $csc /nologo /target:winexe /main:Setup /out:"$(Join-Path $out $installerName)" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "/r:$wvCore" "/r:$wvForms" "/resource:$payloadZip,AnimeDeskPayload" (Join-Path $root 'installer\AppHost.cs') (Join-Path $root 'installer\Setup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
-    Write-Host "Installer: $(Join-Path $out 'AnimeDesk-Setup-0.2.4.exe')"
+    Write-Host "Installer: $(Join-Path $out $installerName)"
     Write-Host "Payload: $payloadZip"
     Write-Host "Manifest: $(Join-Path $out 'payload-manifest.json')"
 }

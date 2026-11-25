@@ -6,7 +6,7 @@ title, pick an episode, choose sub or dub, and it plays in the app window.
 The UI is a local React page. The backend is a local Node service bound to
 `127.0.0.1`. There is no account, no telemetry and no cloud component of our own.
 
-> **Status: v0.2.4, Windows only, pre-1.0.** The provider layer is unofficial and
+> **Status: pre-1.0, Windows only.** The provider layer is unofficial and
 > can break when a source site changes. Read [Known limits](#known-limits) and
 > [docs/PRIVACY.md](docs/PRIVACY.md) before you rely on it.
 

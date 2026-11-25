@@ -2,7 +2,8 @@
 param()
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$installer = Join-Path $root '.release\AnimeDesk-Setup-0.2.4.exe'
+$version = (Get-Content -Raw (Join-Path $root 'package.json') | ConvertFrom-Json).version
+$installer = Join-Path $root ".release\AnimeDesk-Setup-$version.exe"
 $install = Join-Path $env:LOCALAPPDATA 'Programs\AnimeDesk'
 $desktop = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) 'AnimeDesk.lnk'
 $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'AnimeDesk.lnk'
@@ -50,13 +51,16 @@ try {
         if ($line -notmatch 'service ready on http://127\.0\.0\.1:(\d+)') { throw "Bundled service did not start: $line" }
         $port = [int]$Matches[1]
         $status = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/status" -TimeoutSec 10
-        if (($status.providers.id -join ',') -ne 'local') { throw 'Distribution service exposed another provider.' }
+        # The payload ships hianime as the catalogue and the local library.
+        if (($status.providers.id -join ',') -ne 'hianime,local') { throw "Distribution service exposed an unexpected provider set: $($status.providers.id -join ',')" }
         if ($launch -eq 1) {
             $libraryRoot = Split-Path -Parent $library
             Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/settings" -Method Patch -ContentType 'application/json' -Body (@{localLibraryDir=$libraryRoot} | ConvertTo-Json) | Out-Null
             $search = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/search?q=Sample" -TimeoutSec 10
-            if ($search.results.Count -ne 1) { throw 'Installed local search failed.' }
-            $play = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/play" -Method Post -ContentType 'application/json' -Body (@{provider='local';animeId=$search.results[0].id;episodeNumber=1;audio='sub'} | ConvertTo-Json)
+            # hianime answers searches too, so isolate the local hit.
+            $local = @($search.results | Where-Object { $_.provider -eq 'local' })
+            if ($local.Count -ne 1) { throw "Installed local search failed; matched $($local.Count) local results." }
+            $play = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/play" -Method Post -ContentType 'application/json' -Body (@{provider='local';animeId=$local[0].id;episodeNumber=1;audio='sub'} | ConvertTo-Json)
             if (-not $play.session.sessionId) { throw 'Installed local playback failed.' }
             $mediaRequest = [System.Net.HttpWebRequest]::Create("http://127.0.0.1:$port$($play.session.streamUrl)")
             $mediaRequest.AddRange(0, 15)

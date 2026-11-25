@@ -35,6 +35,17 @@ Outputs land only under `.release\`, which is git-ignored. Binaries are therefor
 **not** in source history; a release attaches them as artifacts or GitHub Release
 assets.
 
+## Publishing
+
+`.github/workflows/release.yml` does the packaging on a Windows runner. Push a
+`v*` tag that matches `package.json` and it verifies, builds, checks the payload,
+writes `SHA256SUMS.txt` and publishes a GitHub Release with the installer
+attached. `workflow_dispatch` builds a named tag without publishing, and uploads
+the installer as a workflow artifact instead.
+
+The tag and the `package.json` version must match or the job fails, so a release
+can never advertise a version the binary does not carry.
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\smoke-release.ps1
 ```
@@ -66,6 +77,7 @@ authorised to play.
 - [ ] `npm run verify`, `npm run test:ui`, `npm run test:qa` all pass
 - [ ] `npm audit --omit=dev` clean
 - [ ] No secret, personal path or captured profile data in `git ls-files`
+- [ ] `package.json` version bumped and `docs/PUBLICATION-MANIFEST.txt` regenerated
 - [ ] Clean Windows 10 VM: install, launch, play, close, reopen, uninstall, with
       no separately installed Node
 - [ ] .NET Framework 4.x confirmed present on a clean install, or documented as a

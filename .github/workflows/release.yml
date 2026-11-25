@@ -1,0 +1,114 @@
+# Builds the Windows installer and publishes it on a version tag.
+#
+# A tag is the only trigger: the build runs `npm run verify` and produces a
+# per-user installer, so it is not something to do on every push. The artifact
+# name comes from package.json, and the tag must match it, or a release could
+# claim a version the binary does not have.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag to build, e.g. v0.2.4
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build installer
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          # On a dispatch, build the tag that was asked for, not the default branch.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Check the tag matches package.json
+        shell: pwsh
+        env:
+          REF: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          $version = (Get-Content -Raw package.json | ConvertFrom-Json).version
+          $tag = $env:REF -replace '^v', ''
+          if ($tag -ne $version) {
+            throw "Tag '$env:REF' does not match package.json version '$version'."
+          }
+
+      # build-release.ps1 runs `npm run verify` itself, so a broken build fails
+      # here rather than being packaged.
+      - name: Build installer
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-release.ps1
+
+      # The WebView2 runtime ships with Windows, but a runner image is not a
+      # user's machine; the host is checked for the assemblies it links against.
+      - name: Check the payload
+        shell: pwsh
+        run: |
+          $zip = Join-Path $PWD '.release/AnimeDesk-payload.zip'
+          if (-not (Test-Path $zip)) { throw 'No payload was produced.' }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [IO.Compression.ZipFile]::OpenRead($zip)
+          try { $names = $archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') } }
+          finally { $archive.Dispose() }
+          $required = @(
+            'AnimeDesk.exe', 'runtime/node.exe', 'dist/index.html',
+            'server/providers/hianime.ts', 'WebView2Loader.dll',
+            'Microsoft.Web.WebView2.WinForms.dll', 'notices/WebView2-LICENSE.txt'
+          )
+          foreach ($name in $required) {
+            if ($names -notcontains $name) { throw "Payload is missing $name" }
+          }
+          if ($names -contains 'server/providers/archive.ts') { throw 'archive.ts should not ship.' }
+
+      - name: Write checksums
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem .release -Filter 'AnimeDesk-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'No installer was produced.' }
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($setup.Name)" | Set-Content -Encoding ascii .release/SHA256SUMS.txt
+          Get-Content .release/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installer
+          path: |
+            .release/AnimeDesk-Setup-*.exe
+            .release/SHA256SUMS.txt
+            .release/payload-manifest.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = Get-ChildItem .release -Filter 'AnimeDesk-Setup-*.exe' | Select-Object -First 1
+          gh release create ${{ github.ref_name }} `
+            $setup.FullName `
+            .release/SHA256SUMS.txt `
+            .release/payload-manifest.json `
+            --title ${{ github.ref_name }} `
+            --prerelease `
+            --notes "Unsigned build, so Windows SmartScreen will warn on first run. Requires the Microsoft Edge WebView2 runtime, which ships with Windows 10 and 11. Verify the installer against SHA256SUMS.txt."
