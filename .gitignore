@@ -43,3 +43,6 @@ desktop.ini
 *.msi
 payload-manifest.json
 SHASUMS256.txt
+
+# --- local snapshot copies: backup/ re-copied itself, so keep only the outermost snapshot ---
+backup/*/backup/
