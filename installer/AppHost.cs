@@ -3,7 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Win32;
 
 internal static class AppHost
@@ -23,16 +26,27 @@ internal static class AppHost
         return Run();
     }
 
-    internal static string Browser()
+    /// <summary>
+    /// The Evergreen WebView2 runtime ships with Windows 10/11 via Edge, but it
+    /// is not guaranteed. Its presence is recorded as a per-client version under
+    /// EdgeUpdate, so that key is the cheapest honest check available.
+    /// </summary>
+    internal static bool RuntimeAvailable()
     {
-        string[] names = {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), @"Microsoft\Edge\Application\msedge.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Microsoft\Edge\Application\msedge.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Google\Chrome\Application\chrome.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), @"Google\Chrome\Application\chrome.exe")
-        };
-        foreach (string name in names) if (File.Exists(name)) return name;
-        return null;
+        const string client = @"Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
+        string[] machineRoots = { @"SOFTWARE\WOW6432Node\", @"SOFTWARE\" };
+        foreach (string root in machineRoots)
+        {
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(root + client))
+            {
+                if (key != null && key.GetValue("pv") != null) return true;
+            }
+        }
+        using (RegistryKey user = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\" + client))
+        {
+            if (user != null && user.GetValue("pv") != null) return true;
+        }
+        return false;
     }
 
     private static int Run()
@@ -44,10 +58,10 @@ internal static class AppHost
             string root = Path.GetDirectoryName(typeof(AppHost).Assembly.Location);
             string node = Path.Combine(root, "runtime", "node.exe");
             string server = Path.Combine(root, "server", "main.ts");
-            string browser = Browser();
             if (!File.Exists(node) || !File.Exists(server) || !File.Exists(Path.Combine(root, "dist", "index.html")))
                 return Error("Installation is incomplete. Reinstall AnimeDesk.");
-            if (browser == null) return Error("Microsoft Edge or Google Chrome is required. Install a browser and reopen AnimeDesk.");
+            if (!RuntimeAvailable())
+                return Error("The Microsoft Edge WebView2 runtime is required. Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and reopen AnimeDesk.");
 
             var ready = new ManualResetEvent(false);
             string url = null;
@@ -77,15 +91,8 @@ internal static class AppHost
                     if (!ready.WaitOne(20000) || service.HasExited) return Error("The local service could not start.");
                     string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AnimeDesk", "distribution-window");
                     Directory.CreateDirectory(profile);
-                    var windowStart = new ProcessStartInfo(browser,
-                        "--app=" + url + " --user-data-dir=\"" + profile + "\" --window-size=1280,860 --no-first-run --no-default-browser-check");
-                    windowStart.UseShellExecute = false;
-                    using (Process window = Process.Start(windowStart))
-                    {
-                        if (window == null) return Error("The application window could not start.");
-                        while (!window.WaitForExit(500) && !service.HasExited) { }
-                        if (service.HasExited && !window.HasExited) { try { window.Kill(); } catch { } }
-                    }
+                    int code = ShowWindow(url, profile);
+                    if (code != 0) return code;
                     return 0;
                 }
                 catch (Exception ex) { return Error("AnimeDesk could not launch: " + ex.Message); }
@@ -100,6 +107,47 @@ internal static class AppHost
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Owns the window and its WebView2 surface. Returns 0 on a clean close and
+    /// non-zero only when the surface itself could not be created.
+    /// </summary>
+    private static int ShowWindow(string url, string profile)
+    {
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        int code = 0;
+        using (var form = new Form())
+        {
+            form.Text = Product;
+            form.Width = 1280;
+            form.Height = 860;
+            form.MinimumSize = new System.Drawing.Size(900, 600);
+            form.StartPosition = FormStartPosition.CenterScreen;
+            var web = new WebView2();
+            web.Dock = DockStyle.Fill;
+            form.Controls.Add(web);
+            form.Load += async (sender, eventArgs) =>
+            {
+                try
+                {
+                    CoreWebView2Environment environment = await CoreWebView2Environment.CreateAsync(null, profile);
+                    await web.EnsureCoreWebView2Async(environment);
+                    web.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+                    web.CoreWebView2.Settings.IsStatusBarEnabled = false;
+                    web.CoreWebView2.Navigate(url);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("The application window could not start: " + ex.Message, Product, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    code = 1;
+                    form.Close();
+                }
+            };
+            Application.Run(form);
+        }
+        return code;
     }
 
     private static int BeginUninstall(bool silent)

@@ -12,6 +12,7 @@ the following software.
 | scheduler | 0.23.2 | MIT | `scheduler-LICENSE.txt` |
 | loose-envify | 1.4.0 | MIT | `loose-envify-LICENSE.txt` |
 | js-tokens | 4.0.0 | MIT | `js-tokens-LICENSE.txt` |
+| Microsoft.Web.WebView2 (vendored, `installer/lib/`) | 1.0.3351.48 | Microsoft | `WebView2-LICENSE.txt` |
 
 Node's `LICENSE` includes licence and attribution text for components in the
 runtime. The hls.js notice includes its Brightcove derived-code attribution.

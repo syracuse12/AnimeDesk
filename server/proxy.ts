@@ -39,7 +39,6 @@ function digest(value: string): string {
 
 /** Mint (or reuse) a token for a URL. Reuse keeps playlist rewrites stable. */
 export function mintUrlToken(url: string, referer?: string): string {
-  if (process.env.ANIMEDESK_PROFILE === 'distribution') throw new ProviderError(403, 'Remote streams are unavailable in the distribution profile');
   const target = assertHttpUrl(url).toString();
   const key = digest(`http\u0000${target}\u0000${referer ?? ''}`);
   const existing = tokens.get(key);
@@ -153,8 +152,6 @@ export async function serveStream(
     serveFile(realTarget, req, res);
     return;
   }
-  if (process.env.ANIMEDESK_PROFILE === 'distribution') throw new ProviderError(403, 'Remote streams are unavailable in the distribution profile');
-
   const headers: Record<string, string> = {
     'user-agent': USER_AGENT,
     accept: '*/*',

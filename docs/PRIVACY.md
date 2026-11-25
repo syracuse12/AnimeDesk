@@ -11,7 +11,7 @@ crash reporting and no server of ours in the path.
 | Watch history and resume points | `%APPDATA%\AnimeDesk\history.json` | JSON |
 | Manual skip ranges | `%APPDATA%\AnimeDesk\skips.json` | JSON |
 | Resolved MAL ids | `%APPDATA%\AnimeDesk\mal.json` | JSON |
-| Browser profile, cache, cookies for the app window | `%LOCALAPPDATA%\AnimeDesk\window` | Chromium profile |
+| WebView2 profile, cache, cookies for the app window | `%LOCALAPPDATA%\AnimeDesk\distribution-window` | Chromium profile |
 | Scratch downloads and probe output | `%APPDATA%\AnimeDesk\tmp` | mixed |
 
 The `distribution` build keeps its data in a `distribution` subfolder so it never

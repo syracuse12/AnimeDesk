@@ -34,15 +34,25 @@ test('distribution service exposes local media, persists history and shuts down 
       return { status: response.status, body: await response.json() as Record<string, any> };
     };
     const status = await json('/api/status');
-    assert.deepEqual(status.body.providers.map((provider: { id: string }) => provider.id), ['local']);
+    // hianime is the shipped catalogue; archive stays development-only.
+    assert.deepEqual(status.body.providers.map((provider: { id: string }) => provider.id), ['hianime', 'local']);
     assert.equal(status.body.mpv.available, false);
-    assert.equal((await json('/api/anime/hianime/abc')).status, 403);
-    assert.equal((await json('/api/direct', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.com/video.mp4' }) })).status, 403);
+    // Both used to be gated off in this profile. They are registered now, so the
+    // gate itself is gone: a hianime detail lookup and a direct URL must no
+    // longer answer 403 (upstream reachability decides the eventual status).
+    assert.notEqual((await json('/api/anime/hianime/abc')).status, 403);
+    // A direct URL may still fail for upstream reasons (DNS, unreachable host),
+    // so assert the *profile gate* is gone rather than the status.
+    const direct = await json('/api/direct', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: 'https://example.com/video.mp4' }) });
+    assert.ok(!String(direct.body.error ?? '').includes('distribution profile'), `direct still blocked by the profile gate: ${direct.body.error}`);
     assert.equal((await fetch(base + '/api/status', { headers: { Origin: 'https://example.com' } })).status, 403);
     await json('/api/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ localLibraryDir: path.resolve(scratch, 'library') }) });
     const search = await json('/api/search?q=Sample');
-    assert.equal(search.body.results.length, 1);
-    const entry = search.body.results[0];
+    // hianime is searchable here too, so pick the local hit rather than assuming
+    // the whole result set is ours.
+    const local = search.body.results.filter((item: { provider: string }) => item.provider === 'local');
+    assert.equal(local.length, 1);
+    const entry = local[0];
     const detail = await json(`/api/anime/local/${entry.id}`);
     assert.equal(detail.body.anime.episodes.length, 1);
     const play = await json('/api/play', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ provider: 'local', animeId: entry.id, episodeNumber: 1, audio: 'sub' }) });
@@ -54,12 +64,15 @@ test('distribution service exposes local media, persists history and shuts down 
     assert.equal((await media.arrayBuffer()).byteLength, 16);
     const progress = await json(`/api/sessions/${session.sessionId}/progress?force=1`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ position: 30, duration: 60 }) });
     assert.equal(progress.status, 200);
-    let historyCount = 0;
-    for (let attempt = 0; attempt < 20 && !historyCount; attempt += 1) {
-      historyCount = (await json('/api/history')).body.entries.length;
-      if (!historyCount) await new Promise((resolve) => setTimeout(resolve, 50));
+    let localHistory = 0;
+    for (let attempt = 0; attempt < 20 && !localHistory; attempt += 1) {
+      const entries = (await json('/api/history')).body.entries as { provider: string; animeId: string }[];
+      // A successful /api/direct also records a `local` row under a direct: id,
+      // so match the library episode specifically rather than counting rows.
+      localHistory = entries.filter((row) => row.provider === 'local' && !row.animeId.startsWith('direct:')).length;
+      if (!localHistory) await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    assert.equal(historyCount, 1);
+    assert.equal(localHistory, 1);
     assert.ok(fs.existsSync(path.join(scratch, 'data', 'distribution', 'history.json')));
     await json('/api/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ localLibraryDir: '' }) });
     assert.equal((await fetch(base + session.streamUrl)).status, 403);

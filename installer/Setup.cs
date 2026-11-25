@@ -14,7 +14,7 @@ internal static class Setup
         try
         {
             if (!Environment.Is64BitOperatingSystem) throw new InvalidOperationException("AnimeDesk requires 64-bit Windows 10 or later.");
-            if (AppHost.Browser() == null) throw new InvalidOperationException("Microsoft Edge or Google Chrome is required before installation.");
+            if (!AppHost.RuntimeAvailable()) throw new InvalidOperationException("The Microsoft Edge WebView2 runtime is required before installation. Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and run setup again.");
             string root = AppHost.InstallDir;
             if (Directory.Exists(root) && !File.Exists(Path.Combine(root, AppHost.Marker)))
                 throw new InvalidOperationException("The installation folder contains files that are not an AnimeDesk release.");

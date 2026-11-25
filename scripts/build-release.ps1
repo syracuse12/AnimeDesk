@@ -17,6 +17,15 @@ $nodeArchive = "node-$nodeVersion-win-x64.zip"
 $pinnedNodeSha256 = '0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821'
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path -LiteralPath $csc)) { throw '.NET Framework C# compiler is required on the build machine.' }
+# Vendored WebView2 assemblies. Referenced by full path: csc's /lib: search did
+# not resolve them reliably from a quoted relative path.
+$wvLib = Join-Path $root 'installer\lib'
+$wvCore = Join-Path $wvLib 'Microsoft.Web.WebView2.Core.dll'
+$wvForms = Join-Path $wvLib 'Microsoft.Web.WebView2.WinForms.dll'
+$wvLoader = Join-Path $wvLib 'WebView2Loader.dll'
+foreach ($required in $wvCore, $wvForms, $wvLoader) {
+    if (-not (Test-Path -LiteralPath $required)) { throw "Missing vendored WebView2 assembly: $required" }
+}
 if (-not (Test-Path -LiteralPath (Join-Path $root 'node_modules\hls.js\LICENSE'))) { throw 'Run npm ci on the build machine first.' }
 
 Push-Location $root
@@ -53,14 +62,20 @@ try {
     Copy-Item -LiteralPath (Join-Path $root 'licenses\Apache-2.0.txt') -Destination (Join-Path $stage 'notices\Apache-2.0.txt')
     Copy-Item -LiteralPath (Join-Path $root 'THIRD-PARTY-NOTICES.md') -Destination (Join-Path $stage 'notices\THIRD-PARTY-NOTICES.md')
     Copy-Item -LiteralPath (Join-Path $root 'server') -Destination $stage -Recurse
-    Remove-Item -LiteralPath (Join-Path $stage 'server\providers\hianime.ts'), (Join-Path $stage 'server\providers\archive.ts') -Force
+    Remove-Item -LiteralPath (Join-Path $stage 'server\providers\archive.ts') -Force
     Copy-Item -LiteralPath (Join-Path $root 'shared') -Destination $stage -Recurse
     Copy-Item -LiteralPath (Join-Path $root 'dist') -Destination $stage -Recurse
     '{"type":"module"}' | Set-Content -LiteralPath (Join-Path $stage 'package.json') -Encoding ASCII
     Copy-Item -LiteralPath (Join-Path $root 'RELEASE.md') -Destination $stage
 
-    & $csc /nologo /target:winexe /out:"$(Join-Path $stage 'AnimeDesk.exe')" /r:System.Windows.Forms.dll (Join-Path $root 'installer\AppHost.cs')
+    & $csc /nologo /target:winexe /out:"$(Join-Path $stage 'AnimeDesk.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll "/r:$wvCore" "/r:$wvForms" (Join-Path $root 'installer\AppHost.cs')
     if ($LASTEXITCODE -ne 0) { throw 'App host compilation failed.' }
+    # WebView2 ships next to the host: the managed wrappers are resolved from
+    # the app directory and the loader locates the Evergreen runtime.
+    Copy-Item -LiteralPath $wvCore -Destination $stage
+    Copy-Item -LiteralPath $wvForms -Destination $stage
+    Copy-Item -LiteralPath $wvLoader -Destination $stage
+    Copy-Item -LiteralPath (Join-Path $wvLib 'WebView2-LICENSE.txt') -Destination (Join-Path $stage 'notices\WebView2-LICENSE.txt')
     $manifest = Get-ChildItem -LiteralPath $stage -File -Recurse | ForEach-Object {
         [pscustomobject]@{ path = $_.FullName.Substring($stage.Length + 1).Replace('\', '/'); sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); bytes = $_.Length }
     }
@@ -68,7 +83,7 @@ try {
     $payloadZip = Join-Path $out 'AnimeDesk-payload.zip'
     if (Test-Path -LiteralPath $payloadZip) { Remove-Item -LiteralPath $payloadZip -Force }
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $payloadZip -CompressionLevel Optimal
-    & $csc /nologo /target:winexe /main:Setup /out:"$(Join-Path $out 'AnimeDesk-Setup-0.2.4.exe')" /r:System.Windows.Forms.dll /r:Microsoft.CSharp.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "/resource:$payloadZip,AnimeDeskPayload" (Join-Path $root 'installer\AppHost.cs') (Join-Path $root 'installer\Setup.cs')
+    & $csc /nologo /target:winexe /main:Setup /out:"$(Join-Path $out 'AnimeDesk-Setup-0.2.4.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:Microsoft.CSharp.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll "/r:$wvCore" "/r:$wvForms" "/resource:$payloadZip,AnimeDeskPayload" (Join-Path $root 'installer\AppHost.cs') (Join-Path $root 'installer\Setup.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
     Write-Host "Installer: $(Join-Path $out 'AnimeDesk-Setup-0.2.4.exe')"
     Write-Host "Payload: $payloadZip"

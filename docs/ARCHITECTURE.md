@@ -120,5 +120,5 @@ assembles and verifies the payload. See [RELEASE.md](../RELEASE.md).
 - No server-rendered or publicly hosted deployment.
 - No database; JSON is enough at this size and is greppable.
 - No framework beyond React, no state library, no CSS framework.
-- No Electron or Tauri: both add a second runtime or a toolchain for a window we
-  already get from the browser's `--app` mode.
+- No Electron or Tauri: both add a second runtime or a toolchain. The host uses
+  the WebView2 runtime Windows already carries, in its own window.

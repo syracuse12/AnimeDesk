@@ -15,7 +15,6 @@ let cacheBytes = 0;
 /** Only server-discovered image URLs receive opaque, short-lived route tokens. */
 export function artworkUrl(source?: string): string | undefined {
   if (!source || source.startsWith('/api/stream/')) return source;
-  if (process.env.ANIMEDESK_PROFILE === 'distribution') return undefined;
   let url: URL;
   try { url = assertHttpUrl(source); } catch { return undefined; }
   if (url.protocol !== 'https:' || (url.port && url.port !== '443') || source.length > 2048) return undefined;

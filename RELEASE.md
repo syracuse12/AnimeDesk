@@ -5,17 +5,17 @@ How AnimeDesk is packaged, and what must be true before a build is handed out.
 ## Packaging choice
 
 The release keeps the Node service, the Vite-built React UI, hls.js, and a
-dedicated Edge or Chrome `--app` window. A small .NET Framework host starts the
-bundled Node runtime on a random loopback port, waits for readiness, opens the
-window, and asks the service to stop when the window closes. A per-user installer
-places the curated payload under `%LOCALAPPDATA%\Programs\AnimeDesk`, creates
-Desktop and Start Menu shortcuts, and registers an uninstaller under HKCU. No
-administrator rights are needed. The package targets 64-bit Windows 10 or later
-and treats Edge or Chrome as a checked prerequisite.
+dedicated WebView2 window. A small .NET Framework host starts the bundled Node
+runtime on a random loopback port, waits for readiness, opens the window, and
+asks the service to stop when the window closes. A per-user installer places the
+curated payload under `%LOCALAPPDATA%\Programs\AnimeDesk`, creates Desktop and
+Start Menu shortcuts, and registers an uninstaller under HKCU. No administrator
+rights are needed. The package targets 64-bit Windows 10 or later and treats the
+Microsoft Edge WebView2 runtime as a checked prerequisite.
 
 Electron would add a second Chromium runtime plus a larger packaging and licensing
-surface. Tauri would need a Rust migration and WebView2 packaging. The app-window
-host reuses the playback path the project already exercises.
+surface. Tauri would need a Rust migration. WebView2 reuses the Chromium already
+on the machine, so the host stays small and the playback path is unchanged.
 
 ## Build
 
@@ -48,17 +48,18 @@ installer's checksum before publishing it.
 
 ## Distribution profile
 
-The installed host forces `ANIMEDESK_PROFILE=distribution`. Only the local
-library provider is registered. Remote titles, direct URL playback and remote HLS
-token creation are disabled. Data goes to `%APPDATA%\AnimeDesk\distribution`; the
-browser profile goes to `%LOCALAPPDATA%\AnimeDesk\distribution-window`. The
-development build and its data stay separate. The uninstaller removes the
-release's data and profile as well as binaries, shortcuts and the registry entry.
+The installed host forces `ANIMEDESK_PROFILE=distribution`. Data goes to
+`%APPDATA%\AnimeDesk\distribution`; the WebView2 profile goes to
+`%LOCALAPPDATA%\AnimeDesk\distribution-window`. The development build and its
+data stay separate. The uninstaller removes the release's data and profile as well
+as binaries, shortcuts and the registry entry.
 
-Unavailable in this profile: hianime, Internet Archive search and playback,
-AniList-backed metadata, AniSkip for local files, and the mpv fallback. Local
-files must be ones the user is authorised to play; browser codec support decides
-what plays without mpv.
+The profile ships the `hianime` catalogue and the local library. `archive` stays
+development-only because its per-item rights are unresolved. AniList discovery and
+suggestions, AniSkip, remote stream proxying and remote artwork all work in this
+profile now. The mpv fallback remains absent because no mpv binary is bundled, so
+browser codec support decides what plays. Local files must be ones the user is
+authorised to play.
 
 ## Pre-release checklist
 

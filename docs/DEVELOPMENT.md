@@ -4,7 +4,7 @@
 
 - Windows 10/11 x64
 - Node.js 24 or newer (native TypeScript execution; there is no server build step)
-- Edge or Chrome for the app window and the browser suites
+- Edge or Chrome for the browser test suites; the app itself needs the WebView2 runtime, which ships with Edge
 - Optional: `npm run setup:mpv` for the fallback player
 
 ```powershell

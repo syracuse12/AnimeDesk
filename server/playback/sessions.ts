@@ -377,7 +377,7 @@ export class SessionManager extends EventEmitter {
       title: item.session.animeTitle,
       episodeNumber: item.session.episodeNumber,
       duration: item.session.duration,
-      enabled: settings.aniskipEnabled && process.env.ANIMEDESK_PROFILE !== 'distribution',
+      enabled: settings.aniskipEnabled,
     }).catch(() => null);
     if (!info || item.stopped) return null;
     item.session.skips = info;

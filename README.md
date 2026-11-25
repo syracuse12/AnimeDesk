@@ -53,8 +53,8 @@ The UI is a local React page. The backend is a local Node service bound to
 - **Windows 10 or 11, 64-bit.** There is no macOS or Linux build.
 - **Node.js 24 or newer.** The service runs TypeScript directly through Node's
   native type stripping, so no build step is needed for the server.
-- **Microsoft Edge or Google Chrome.** The app window is a browser `--app`
-  window with a dedicated profile.
+- **The Microsoft Edge WebView2 runtime.** The app runs in its own window; this
+  ships with Windows 10 and 11 via Edge and is checked at install time.
 - Optional: **mpv**, only as a fallback player for codecs the browser cannot
   decode. `npm run setup:mpv` fetches a verified build into `tools\mpv`.
 

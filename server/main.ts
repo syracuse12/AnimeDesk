@@ -134,7 +134,6 @@ const FEATURED_TITLES = ['one piece', 'attack on titan', 'demon slayer', 'jujuts
 let featuredCache: { at: number; items: AnimeDetail[] } = { at: 0, items: [] };
 
 async function featured(): Promise<AnimeDetail[]> {
-  if (distributionProfile) return [];
   if (Date.now() - featuredCache.at < 15 * 60_000 && featuredCache.items.length) {
     return featuredCache.items;
   }
@@ -170,7 +169,7 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
       providers: providerInfos(),
       settings,
       platform: process.platform,
-      shell: 'browser',
+      shell: 'app-window',
       embedded: true,
     });
     return true;
@@ -221,10 +220,9 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     return true;
   }
 
-  // Discovery is AniList metadata, so it is only reachable while the remote
-  // providers are: the distribution profile is offline by design.
+  // Discovery is AniList metadata and is best-effort; the home rows degrade to
+  // empty rather than failing when the upstream is unreachable.
   if (route === '/api/discover' && method === 'GET') {
-    if (distributionProfile) return json(res, 200, { items: [] }), true;
     const kind = (url.searchParams.get('kind') ?? 'trending') as DiscoverKind;
     const genreParam = url.searchParams.get('genre') ?? undefined;
     const genre = genreParam && isGenre(genreParam) ? genreParam : undefined;
@@ -234,7 +232,6 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
   }
 
   if (route === '/api/suggest' && method === 'GET') {
-    if (distributionProfile) return json(res, 200, { items: [] }), true;
     const term = (url.searchParams.get('q') ?? '').trim().slice(0, LIMITS.maxSearchLength);
     const items = term ? await suggest(term) : [];
     json(res, 200, { items: items.map((item) => safeArt(item)) });
@@ -267,7 +264,6 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
   }
 
   if (route === '/api/direct' && method === 'POST') {
-    if (distributionProfile) throw new ProviderError(403, 'Direct remote streams are unavailable in the distribution profile');
     const body = asRecord(await readBody(req));
     const raw = String(body.url ?? '').trim();
     assertHttpUrl(raw);
