@@ -26,6 +26,8 @@ interface Props {
   settings: Settings;
   /** Fired when embedded playback cannot proceed; caller may retry in mpv. */
   onFallback: (reason: string) => void;
+  /** False in builds that do not bundle mpv, so the dead action is not offered. */
+  fallbackAvailable: boolean;
   onLeave: () => void;
   onAction: (action: string, value?: number) => Promise<void>;
 }
@@ -41,7 +43,7 @@ interface TrackInfo {
  * tracks and subtitles all work without fighting CORS or the CDN's referer
  * check. Anything hls.js cannot decode hands back to the mpv fallback.
  */
-export function Player({ session, settings, onFallback, onLeave, onAction }: Props) {
+export function Player({ session, settings, onFallback, fallbackAvailable, onLeave, onAction }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -510,9 +512,14 @@ export function Player({ session, settings, onFallback, onLeave, onAction }: Pro
         <div className="stage-error">
           <h3>Cannot play this source in the app</h3>
           <p>{fatal}</p>
+          {!fallbackAvailable && (
+            <p>This build plays in-app only. Try another quality or episode.</p>
+          )}
           <div className="row">
-            <button className="btn primary" onClick={() => onFallback(fatal)}>Open in mpv</button>
-            <button className="btn" onClick={onLeave}>Back to episodes</button>
+            {fallbackAvailable && (
+              <button className="btn primary" onClick={() => onFallback(fatal)}>Open in mpv</button>
+            )}
+            <button className={fallbackAvailable ? 'btn' : 'btn primary'} onClick={onLeave}>Back to episodes</button>
           </div>
         </div>
       )}

@@ -45,12 +45,13 @@ never touches the UI, the store or the player.
 
 | Provider | Transport | Notes |
 | --- | --- | --- |
-| `hianime` | HTML/embed scraping | Unofficial; parse failures degrade to empty results |
-| `archive` | Internet Archive metadata API | Subtitle-only; rights vary per item |
-| `local` | Filesystem | One directory per series; no network |
+| `hianime` | HTML/embed scraping | Shipped; unofficial, parse failures degrade to empty results |
+| `archive` | Internet Archive metadata API | Development-only; subtitle-only, rights vary per item |
+| `local` | Filesystem | Shipped; one directory per series, no network |
 
 The provider registry (`server/providers/index.ts`) decides what is enabled. The
-`distribution` profile registers `local` only.
+`distribution` profile registers `hianime` and `local`; development builds also
+register `archive`.
 
 ## Layers
 

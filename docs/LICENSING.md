@@ -36,16 +36,15 @@ AnimeDesk is not affiliated with any anime studio, licensor, distributor or
 streaming service. It hosts nothing itself. Every integration is an unofficial
 client of a site or API owned by someone else.
 
-Who may watch what, through which source, is the user's own position to
-establish. AnimeDesk can only resolve and play a stream; it confers no rights.
+AnimeDesk resolves and plays a stream; it does not host or license the media.
 
 ## Provider rights position
 
 | Provider | Position |
 | --- | --- |
-| `hianime` | Unofficial streaming integration. The adapter is AnimeDesk's own code and is published; whether the endpoints it calls require permission is unresolved. It is absent from the installer payload. |
-| `archive` | Internet Archive hosts the files. Membership of an Archive collection does **not** prove an item is public domain; each item's own licence field governs. This integration is absent from the installer payload. |
-| `local` | Your files. Rights are entirely yours to establish. |
+| `hianime` | Unofficial streaming integration. The adapter is AnimeDesk's own code and ships in the installer. The media it resolves is hosted and licensed by third parties; hianime's terms and availability are outside this project's control. |
+| `archive` | Internet Archive hosts the files. Membership of an Archive collection does **not** prove an item is public domain; each item's own licence field governs. Development builds only; absent from the installer payload. |
+| `local` | Your files. Shipped in the installer. |
 
 Metadata from AniList is used under the
 [AniList API terms](https://docs.anilist.co/guide/terms-of-use). Skip timestamps

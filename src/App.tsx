@@ -707,8 +707,8 @@ export function App() {
                 <h2>{query.trim() ? 'Nothing matched' : 'Search for a title'}</h2>
                 <p>
                   {query.trim()
-                    ? 'Try a shorter title, or switch to the Internet Archive for public-domain animation that always plays.'
-                    : 'Use the search box, or browse your local library with an empty query.'}
+                    ? 'Try a shorter title, or check the spelling and search again.'
+                    : 'Use the search box above to find a series.'}
                 </p>
               </div>
             )}
@@ -769,6 +769,7 @@ export function App() {
                 session={session}
                 settings={settings}
                 onFallback={(reason) => void fallbackToMpv(reason)}
+                fallbackAvailable={Boolean(status?.mpv.available)}
                 onLeave={() => setView('detail')}
                 onAction={act}
               />
@@ -886,12 +887,14 @@ export function App() {
 
             <fieldset className="group">
               <legend>Playback</legend>
-              <Toggle
-                label="Play inside AnimeDesk"
-                hint="Off sends every episode to the mpv window instead."
-                checked={settings.embeddedPlayer}
-                onChange={(value) => void saveSettings({ embeddedPlayer: value })}
-              />
+              {status?.mpv.available && (
+                <Toggle
+                  label="Play inside AnimeDesk"
+                  hint="Off sends every episode to the mpv window instead."
+                  checked={settings.embeddedPlayer}
+                  onChange={(value) => void saveSettings({ embeddedPlayer: value })}
+                />
+              )}
               <Toggle
                 label="Autoplay next episode"
                 hint="Uses the real end of the episode, with a countdown you can cancel."
@@ -970,14 +973,16 @@ export function App() {
                   onBlur={(event) => void saveSettings({ localLibraryDir: event.target.value })}
                 />
               </label>
-              <label className="field">
-                <span>mpv executable (blank uses the bundled build)</span>
-                <input
-                  defaultValue={settings.mpvPath}
-                  placeholder="tools\mpv\mpv.exe"
-                  onBlur={(event) => void saveSettings({ mpvPath: event.target.value })}
-                />
-              </label>
+              {status?.mpv.available && (
+                <label className="field">
+                  <span>mpv executable (blank uses the bundled build)</span>
+                  <input
+                    defaultValue={settings.mpvPath}
+                    placeholder="tools\mpv\mpv.exe"
+                    onBlur={(event) => void saveSettings({ mpvPath: event.target.value })}
+                  />
+                </label>
+              )}
             </fieldset>
 
             <dl className="facts">
@@ -986,7 +991,7 @@ export function App() {
               <dt>Data folder</dt>
               <dd>{status?.dataDir}</dd>
               <dt>mpv</dt>
-              <dd>{status?.mpv.version ?? 'not found'}</dd>
+              <dd>{status?.mpv.available ? status.mpv.version ?? 'detected' : 'not bundled'}</dd>
             </dl>
 
             <h2 className="section-title">Sources</h2>

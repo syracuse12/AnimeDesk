@@ -79,14 +79,16 @@ recover every possible runtime value.
 - The snapshot carries two GitHub Actions workflows, `ci.yml` and `windows.yml`,
   alongside the issue and PR templates. They postdate the original audit and were
   not part of its scope.
-- The release payload contains 36 files. It contains no private application
-  state, local media, mpv or FFmpeg binary, or remote provider implementation.
-  The installer embeds exactly the same payload zip, verified by SHA-256.
-- The installed host forces the local-only distribution profile and a random
-  loopback port. Host, Origin, and browser fetch metadata guards were exercised.
+- The release payload contains 46 files. It contains no private application
+  state, local media, or mpv/FFmpeg binary. It includes the hianime provider and
+  the local library; the Archive provider is omitted. The installer embeds
+  exactly the same payload zip, verified by SHA-256.
+- The installed host forces the distribution profile and a random loopback port.
+  Host, Origin, and browser fetch metadata guards were exercised.
 - The release installer installed, started its bundled Node runtime, served a
   local media range, persisted history across restart, and uninstalled cleanly.
-  It was not tested on a separate clean Windows machine.
+  Remote hianime search, artwork, sub and dub playback were also exercised on the
+  installed build. It was not tested on a separate clean Windows machine.
 
 ## Verification
 
@@ -113,26 +115,21 @@ exercised remote media proxy playlist, segment, subtitle, and Range handling.
 1. ~~Maintainer approval of the `syracuse12` copyright attribution.~~ Approved.
    The maintainer has also confirmed authority to licence the project's own code
    under MIT and authorised public source publication.
-2. ~~The `hianime` source integration.~~ Approved for retention. It stays in the
-   source tree as an independently written adapter. Its unresolved part is
-   narrower than first recorded: the adapter code is ours, but whether the
-   upstream endpoints it calls may be used has not been established. It remains
-   excluded from the installer payload.
+2. ~~The `hianime` source integration.~~ Approved for the distribution profile by
+   the maintainer on 2026-11-26. The independently written adapter ships in the
+   installer; the upstream service remains third-party and unofficial.
 3. The installed build has been smoke-tested on this machine, but clean-machine
    Windows 10 prerequisites, including .NET Framework availability and unsigned
    installer warnings, have not been established. This is a release gap, not a
    source-publication blocker.
 
-### Still unestablished after publication
+### Operational risks after publication
 
-- Whether hianime.at terms permit third-party client access. No permission has
-  been obtained or cited; the integration is published on the honest footing that
-  it is unofficial.
-- Per-item rights for anything the `archive` provider returns.
+- `hianime` availability: the upstream site can redesign or block access, which
+  can break search, resolve or playback until the adapter is updated.
+- Per-item rights for anything the development-only `archive` provider returns.
 - Clean-machine installer behaviour and code-signing reputation.
 - mpv/FFmpeg build configuration for any future bundled player.
-
-An "educational use" label is not treated here as a source of rights.
 
 See [PUBLICATION-MANIFEST.txt](PUBLICATION-MANIFEST.txt) for the candidate tracked
 file list and SHA-256 hashes. Release payload hashes are in the ignored local

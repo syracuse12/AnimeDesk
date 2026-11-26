@@ -1,7 +1,7 @@
 # Third-party notices
 
-This repository and the optional local-only installer bundle include or depend on
-the following software.
+This repository and the installer bundle include or depend on the following
+software.
 
 | Component | Version | Licence | Included notice |
 | --- | --- | --- | --- |
@@ -28,11 +28,11 @@ own licence text when installed. The dataset is not copied as a standalone file
 into the release payload.
 
 **In the source repository:** all providers are present, including the unofficial
-hianime and Internet Archive integrations, AniList and AniSkip lookups. They run
-from source with the development profile. In the installed `distribution` profile
-those are disabled and only the local library provider is registered; the hianime
-and Archive modules are omitted from the payload. No mpv or FFmpeg binary is in
-the installer. Any future
+hianime and Internet Archive integrations, AniList and AniSkip lookups. The
+installed `distribution` profile ships the hianime provider and the local library;
+the Archive module is omitted from the payload. hianime is a third-party index:
+the adapter is AnimeDesk's own code, while the media it resolves belongs to its
+rights holders. No mpv or FFmpeg binary is in the installer. Any future
 mpv inclusion requires evidence of the exact build configuration and all
 linked libraries, their applicable GPL/LGPL terms, attribution, and the
 corresponding-source or other applicable source availability method. The

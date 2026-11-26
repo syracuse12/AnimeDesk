@@ -67,11 +67,11 @@ data stay separate. The uninstaller removes the release's data and profile as we
 as binaries, shortcuts and the registry entry.
 
 The profile ships the `hianime` catalogue and the local library. `archive` stays
-development-only because its per-item rights are unresolved. AniList discovery and
-suggestions, AniSkip, remote stream proxying and remote artwork all work in this
-profile now. The mpv fallback remains absent because no mpv binary is bundled, so
-browser codec support decides what plays. Local files must be ones the user is
-authorised to play.
+development-only because its catalogue needs a per-item rights check. AniList
+discovery and suggestions, AniSkip, remote stream proxying and remote artwork all
+work in this profile. The mpv fallback remains absent because no mpv binary is
+bundled, so browser codec support decides what plays; local playback uses files
+already on the machine.
 
 ## Pre-release checklist
 
@@ -94,8 +94,8 @@ authorised to play.
 - .NET Framework 4.x availability is unverified on a clean Windows 10 image.
 - mpv and FFmpeg are not in the payload; adding them needs the licence and source
   work described in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-- Rights for `hianime` playback are not established for recipients; the release
-  should only claim sources each user may access.
+- The `hianime` integration depends on a third-party site; a redesign or block can
+  break search, resolve or playback until the adapter is updated.
 
 ## Repository audit trail
 

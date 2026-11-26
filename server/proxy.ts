@@ -272,8 +272,7 @@ function serveFile(
 /**
  * A local file path is anything that is not an http(s) URL. Testing for a
  * Windows drive or UNC prefix alone missed POSIX paths, so a library on Linux
- * was handed to mintUrlToken and rejected as an invalid URL (403 in the
- * distribution profile, where remote streams are off).
+ * was handed to mintUrlToken and rejected as an invalid URL.
  */
 export function streamUrlFor(source: { url: string; referer?: string }): string {
   if (/^https?:\/\//i.test(source.url)) {

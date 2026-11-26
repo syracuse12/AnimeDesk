@@ -1,13 +1,13 @@
 # AnimeDesk
 
-A local-first Windows desktop for watching anime you are allowed to watch: search a
-title, pick an episode, choose sub or dub, and it plays in the app window.
+A local-first Windows desktop for watching anime: search a title, pick an episode,
+choose sub or dub, and it plays in the app window.
 
 The UI is a local React page. The backend is a local Node service bound to
 `127.0.0.1`. There is no account, no telemetry and no cloud component of our own.
 
-> **Status: pre-1.0, Windows only.** The provider layer is unofficial and
-> can break when a source site changes. Read [Known limits](#known-limits) and
+> **Status: pre-1.0, Windows only.** The hianime integration is unofficial and
+> can break when the source site changes. Read [Known limits](#known-limits) and
 > [docs/PRIVACY.md](docs/PRIVACY.md) before you rely on it.
 
 ---
@@ -21,7 +21,7 @@ The UI is a local React page. The backend is a local Node service bound to
 - [Checks](#checks)
 - [Providers](#providers)
 - [How it works](#how-it-works)
-- [Affiliation and your responsibility](#affiliation-and-your-responsibility)
+- [Affiliation](#affiliation)
 - [Known limits](#known-limits)
 - [Repository layout](#repository-layout)
 - [Documentation](#documentation)
@@ -114,9 +114,9 @@ to use another binary.
 
 | Provider | What it is | Notes |
 | --- | --- | --- |
-| `hianime` | Third-party streaming index | Widest catalogue, real sub **and** dub streams. Scrapes the same endpoints ani-cli uses. Unofficial; can break. |
-| `archive` | Internet Archive animation collection | Rights vary per item — check the item and your own access rights. Subtitles only, no dub. |
-| `local` | Your own video folder | One series per sub-folder. Nothing leaves the machine. |
+| `hianime` | Third-party streaming index | **Shipped in the installer.** Widest catalogue, real sub **and** dub streams. Scrapes the same endpoints ani-cli uses. Unofficial; can break. |
+| `archive` | Internet Archive animation collection | Development builds only. Rights vary per item; subtitles only, no dub. |
+| `local` | Your own video folder | **Shipped in the installer.** One series per sub-folder. Nothing leaves the machine. |
 
 Dub availability is read per series from the provider, never assumed. When a dub
 is missing, the toggle is disabled and playback falls back to sub.
@@ -147,26 +147,18 @@ UI (React) --HTTP--> local Node service --HTTP--> stream CDN
   reason `eof` or on the browser's `ended` event — never on a timer.
 - The UI is a mirror: the service pushes session state over server-sent events.
 
-## Affiliation and your responsibility
+## Affiliation
 
 AnimeDesk is an independent project. It is **not affiliated with, endorsed by, or
 sponsored by** any anime studio, licensor, distributor or streaming service, and
-it does not host video. The `hianime`, `archive` and AniList integrations are
-unofficial clients of third-party sites and APIs that AnimeDesk does not control.
+it does not host video. The `hianime` integration is an unofficial client of a
+third-party index that AnimeDesk does not control; it ships as part of the product
+and can change or break independently of this repository. AniList and AniSkip are
+third-party APIs used for metadata and skip times.
 
-**You are responsible for using media sources you are authorised to access.**
-AnimeDesk resolves a stream and plays it; it cannot grant you rights. Watching a
-title through an unofficial index is a different legal position from watching it
-on a service you pay for, and nothing here is legal advice.
-
-Three things are commonly conflated and should not be:
-
-- The **MIT licence** covers AnimeDesk's own source code only.
-- **Anime, artwork, subtitles and stream URLs** belong to their rights holders and
-  are not licensed to you by this repository.
-- **Playback access** depends on the source you pick and what you are entitled to.
-
-See [docs/LICENSING.md](docs/LICENSING.md).
+The **MIT licence** covers AnimeDesk's own source code only. Anime, artwork,
+subtitles and stream URLs belong to their rights holders and are not licensed to
+you by this repository. See [docs/LICENSING.md](docs/LICENSING.md).
 
 ## Known limits
 

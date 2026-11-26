@@ -6,9 +6,8 @@ import { localProvider } from './local.ts';
 /** Registration order is display order in the UI. */
 export const distributionProfile = process.env.ANIMEDESK_PROFILE === 'distribution';
 const registry = new Map<ProviderId, Provider>();
-// hianime is the catalogue, so the release ships it; without it an installed
-// build has no titles and can only play files the user already owns. Archive
-// stays development-only: its per-item rights are unresolved and every play
+// The release ships the hianime catalogue plus the local library. Archive stays
+// development-only: its catalogue needs a per-item rights check and every play
 // needs a live lookup.
 if (distributionProfile) {
   const { hianimeProvider } = await import('./hianime.ts');

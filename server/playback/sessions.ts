@@ -206,9 +206,11 @@ export class SessionManager extends EventEmitter {
   }
 
   private pickMode(requested?: PlaybackMode): PlaybackMode {
-    const wanted = requested ?? (store.getSettings().embeddedPlayer ? 'embedded' : 'external');
+    // A stale setting must not strand an install that has no mpv: without the
+    // external player, embedded is the only mode that can work.
+    const wanted = requested ?? (this.mpvPath && !store.getSettings().embeddedPlayer ? 'external' : 'embedded');
     if (wanted === 'external') {
-      if (!this.mpvPath) throw new ProviderError(500, 'mpv was not found; run `npm run setup:mpv`');
+      if (!this.mpvPath) throw new ProviderError(500, 'mpv is not available in this build.');
       return 'external';
     }
     // Embedded is always offered: the service itself is the stream proxy.
