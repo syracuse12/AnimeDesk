@@ -113,5 +113,4 @@ jobs:
             .release/SHA256SUMS.txt `
             .release/payload-manifest.json `
             --title ${{ github.ref_name }} `
-            --prerelease `
-            --notes "Unsigned build, so Windows SmartScreen will warn on first run. Requires the Microsoft Edge WebView2 runtime, which ships with Windows 10 and 11. Verify the installer against SHA256SUMS.txt."
+            --notes "Unsigned build, so Windows SmartScreen will warn on first run. Needs the Microsoft Edge WebView2 runtime; setup installs Microsoft's signed runtime automatically if it is missing. Verify the installer against SHA256SUMS.txt."

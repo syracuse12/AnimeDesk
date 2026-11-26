@@ -1,7 +1,7 @@
 {
   "name": "animedesk",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Lightweight Windows anime desk: search, episodes, dub/sub, mpv playback and automatic next-episode progression.",
   "type": "module",
   "engines": {

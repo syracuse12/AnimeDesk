@@ -34,6 +34,9 @@ test('distribution service exposes local media, persists history and shuts down 
       return { status: response.status, body: await response.json() as Record<string, any> };
     };
     const status = await json('/api/status');
+    // The service reads its version from package.json so the UI, the API and
+    // the installer cannot drift apart.
+    assert.equal(status.body.version, JSON.parse(fs.readFileSync('package.json', 'utf8')).version);
     // hianime is the shipped catalogue; archive stays development-only.
     assert.deepEqual(status.body.providers.map((provider: { id: string }) => provider.id), ['hianime', 'local']);
     assert.equal(status.body.mpv.available, false);

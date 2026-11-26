@@ -70,7 +70,9 @@ try {
     Remove-Item -LiteralPath (Join-Path $stage 'server\providers\archive.ts') -Force
     Copy-Item -LiteralPath (Join-Path $root 'shared') -Destination $stage -Recurse
     Copy-Item -LiteralPath (Join-Path $root 'dist') -Destination $stage -Recurse
-    '{"type":"module"}' | Set-Content -LiteralPath (Join-Path $stage 'package.json') -Encoding ASCII
+    # The payload keeps its real version so the app and the uninstall entry
+    # report the same build that the installer filename claims.
+    (@{ type = 'module'; version = $version } | ConvertTo-Json -Compress) | Set-Content -LiteralPath (Join-Path $stage 'package.json') -Encoding ASCII
     Copy-Item -LiteralPath (Join-Path $root 'RELEASE.md') -Destination $stage
 
     & $csc /nologo /target:winexe /out:"$(Join-Path $stage 'AnimeDesk.exe')" /r:System.Windows.Forms.dll /r:System.Drawing.dll "/r:$wvCore" "/r:$wvForms" (Join-Path $root 'installer\AppHost.cs')

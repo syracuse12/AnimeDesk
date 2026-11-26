@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -14,7 +15,8 @@ internal static class Setup
         try
         {
             if (!Environment.Is64BitOperatingSystem) throw new InvalidOperationException("AnimeDesk requires 64-bit Windows 10 or later.");
-            if (!AppHost.RuntimeAvailable()) throw new InvalidOperationException("The Microsoft Edge WebView2 runtime is required before installation. Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and run setup again.");
+            if (!AppHost.RuntimeAvailable() && !AppHost.InstallRuntime(silent))
+                throw new InvalidOperationException("The Microsoft Edge WebView2 runtime is required. Install it from https://developer.microsoft.com/microsoft-edge/webview2/ and run setup again.");
             string root = AppHost.InstallDir;
             if (Directory.Exists(root) && !File.Exists(Path.Combine(root, AppHost.Marker)))
                 throw new InvalidOperationException("The installation folder contains files that are not an AnimeDesk release.");
@@ -49,13 +51,14 @@ internal static class Setup
                 }
                 finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
 
+                string version = ReadVersion(root);
                 string executable = Path.Combine(root, "AnimeDesk.exe");
                 CreateShortcut(AppHost.DesktopLink, executable);
                 CreateShortcut(AppHost.MenuLink, executable);
                 using (RegistryKey key = Registry.CurrentUser.CreateSubKey(AppHost.UninstallKey))
                 {
                     key.SetValue("DisplayName", "AnimeDesk");
-                    key.SetValue("DisplayVersion", "0.2.4");
+                    key.SetValue("DisplayVersion", version);
                     key.SetValue("Publisher", "AnimeDesk local build");
                     key.SetValue("InstallLocation", root);
                     key.SetValue("DisplayIcon", executable);
@@ -72,6 +75,22 @@ internal static class Setup
             if (!silent) MessageBox.Show("Installation failed: " + ex.Message, "AnimeDesk", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
+    }
+
+    /// <summary>
+    /// The payload's package.json carries the build version, so the uninstall
+    /// entry reports the release that was actually installed.
+    /// </summary>
+    private static string ReadVersion(string root)
+    {
+        try
+        {
+            string manifest = File.ReadAllText(Path.Combine(root, "package.json"));
+            Match match = Regex.Match(manifest, "\"version\"\\s*:\\s*\"([^\"]+)\"");
+            if (match.Success) return match.Groups[1].Value;
+        }
+        catch { }
+        return "0.0.0";
     }
 
     private static void CreateShortcut(string path, string executable)

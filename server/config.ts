@@ -1,4 +1,6 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { appDataDir } from './paths.ts';
 import type { Settings } from '../shared/types.ts';
 
@@ -70,7 +72,17 @@ export const LIMITS = {
   maxPlaybackRate: 3,
 } as const;
 
-export const VERSION = '0.3.0';
+// Single-sourced from package.json: the release script rewrites that file for
+// the payload, so the window, the API and the uninstall entry cannot disagree
+// about which build is installed.
+export const VERSION = (() => {
+  try {
+    const file = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
+    return String(JSON.parse(readFileSync(file, 'utf8')).version ?? '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+})();
 
 /** Providers are separated so the UI can label and gate them honestly. */
 export const PROVIDER_TIMEOUT = 25_000;

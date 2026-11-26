@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -47,6 +49,53 @@ internal static class AppHost
             if (user != null && user.GetValue("pv") != null) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Installs the Evergreen runtime from Microsoft's bootstrapper when it is
+    /// missing. A Windows 10/11 machine with Edge already has it; this covers
+    /// stripped or server images instead of failing the install outright.
+    /// </summary>
+    internal static bool InstallRuntime(bool silent)
+    {
+        const string bootstrapper = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+        string file = Path.Combine(Path.GetTempPath(), "AnimeDesk-WebView2-" + Guid.NewGuid().ToString("N") + ".exe");
+        try
+        {
+            if (!silent && MessageBox.Show(
+                "AnimeDesk needs the Microsoft Edge WebView2 runtime, which is not installed. Download and install it now?",
+                Product, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                return false;
+            using (var client = new WebClient())
+            {
+                client.Headers.Add("User-Agent", Product + "-Setup");
+                client.DownloadFile(bootstrapper, file);
+            }
+            // Never run an unsigned download: the bootstrapper is Microsoft-signed.
+            X509Certificate certificate = X509Certificate.CreateFromSignedFile(file);
+            if (certificate.Subject.IndexOf("Microsoft Corporation", StringComparison.OrdinalIgnoreCase) < 0)
+                throw new InvalidOperationException("The WebView2 installer was not signed by Microsoft.");
+            var start = new ProcessStartInfo(file, "/silent /install");
+            start.UseShellExecute = false;
+            using (var process = Process.Start(start))
+            {
+                if (process == null || !process.WaitForExit(300000))
+                {
+                    try { if (process != null) process.Kill(); } catch { }
+                    return false;
+                }
+                if (process.ExitCode != 0) return false;
+            }
+            return RuntimeAvailable();
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            try { if (File.Exists(file)) File.Delete(file); } catch { }
+        }
     }
 
     private static int Run()

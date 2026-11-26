@@ -10,8 +10,9 @@ runtime on a random loopback port, waits for readiness, opens the window, and
 asks the service to stop when the window closes. A per-user installer places the
 curated payload under `%LOCALAPPDATA%\Programs\AnimeDesk`, creates Desktop and
 Start Menu shortcuts, and registers an uninstaller under HKCU. No administrator
-rights are needed. The package targets 64-bit Windows 10 or later and treats the
-Microsoft Edge WebView2 runtime as a checked prerequisite.
+rights are needed. The package targets 64-bit Windows 10 or later. If the
+Microsoft Edge WebView2 runtime is missing, setup downloads Microsoft's signed
+Evergreen bootstrapper and installs it before continuing.
 
 Electron would add a second Chromium runtime plus a larger packaging and licensing
 surface. Tauri would need a Rust migration. WebView2 reuses the Chromium already
@@ -78,8 +79,8 @@ authorised to play.
 - [ ] `npm audit --omit=dev` clean
 - [ ] No secret, personal path or captured profile data in `git ls-files`
 - [ ] `package.json` version bumped and `docs/PUBLICATION-MANIFEST.txt` regenerated
-- [ ] Clean Windows 10 VM: install, launch, play, close, reopen, uninstall, with
-      no separately installed Node
+- [ ] Clean Windows 10 VM with no WebView2 runtime: install (setup downloads it),
+      launch, play, close, reopen, uninstall, with no separately installed Node
 - [ ] .NET Framework 4.x confirmed present on a clean install, or documented as a
       prerequisite
 - [ ] Notices match the actual payload byte for byte
